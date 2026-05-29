@@ -19,29 +19,34 @@ export const minimal: Scenario = {
     'init → apply → run -- node --version → remove (Image-Mode, keine Services)',
   estimatedSeconds: 60,
   async run(ctx) {
-    ctx.step(`init ${ctx.name} --with=node`);
-    await ctx.cli(['init', ctx.name, '--with=node']);
+    await ctx.step(`init ${ctx.name} --with=node`, async () => {
+      await ctx.cli(['init', ctx.name, '--with=node']);
+    });
 
-    ctx.step(`apply ${ctx.name}`);
-    await ctx.cli(['apply', ctx.name, '--yes']);
+    await ctx.step(`apply ${ctx.name}`, async () => {
+      await ctx.cli(['apply', ctx.name, '--yes']);
+    });
 
-    ctx.step(`run ${ctx.name} -- node --version`);
-    const result = await ctx.cliCapture([
-      'run',
-      ctx.name,
-      '--',
-      'node',
-      '--version',
-    ]);
-    ctx.assert(
-      result.exitCode === 0,
-      `\`monoceros run … node --version\` exited with ${result.exitCode}: ${result.stderr.trim()}`,
-    );
-    const versionLine = result.stdout.trim();
-    ctx.assert(
-      /^v\d+\.\d+\.\d+/.test(versionLine),
-      `Expected a semver-style version on stdout (got: ${JSON.stringify(versionLine)})`,
-    );
-    ctx.info(`node version inside the container: ${versionLine}`);
+    await ctx.step(`run ${ctx.name} -- node --version`, async () => {
+      const result = await ctx.cliCapture([
+        'run',
+        ctx.name,
+        '--',
+        'node',
+        '--version',
+      ]);
+      ctx.expect(
+        '`monoceros run … node --version` exits 0',
+        result.exitCode === 0,
+        `exit ${result.exitCode}: ${result.stderr.trim()}`,
+      );
+      const versionLine = result.stdout.trim();
+      ctx.expect(
+        'stdout matches semver pattern v<MAJOR>.<MINOR>.<PATCH>',
+        /^v\d+\.\d+\.\d+/.test(versionLine),
+        `got ${JSON.stringify(versionLine)}`,
+      );
+      ctx.info(`node version inside the container: ${versionLine}`);
+    });
   },
 };

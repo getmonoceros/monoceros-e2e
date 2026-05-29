@@ -32,21 +32,24 @@ export interface ScenarioCtx {
     stdout: string;
     stderr: string;
   }>;
-  /** Sub-step label for the output adapter. */
-  step: (label: string) => void;
-  /** Free-form info line (between steps). */
+  /**
+   * Wraps `fn` in a step block: prints a start marker, runs the body,
+   * then a PASS marker with timing — or a FAIL marker + re-throw on
+   * error. The scenario's body composes from these so the output has
+   * clear brackets around each phase.
+   */
+  step: <T>(label: string, fn: () => Promise<T>) => Promise<T>;
+  /** Free-form info line between or inside steps. */
   info: (msg: string) => void;
   /**
-   * Assertion helper — throws an Error with a useful message if
-   * `cond` is falsy. Keeps the scenario code tight without pulling
-   * `assert`/`chai`/whatever in.
+   * Assertion with a visible „passed" marker. On true: prints an
+   * indented `✓ <label>` line. On falsy: throws
+   * `Expectation failed: <label>` with optional `details` appended.
    *
-   * Note: NOT typed as `asserts cond` predicate because TS only
-   * allows that on top-level functions, not on object methods (see
-   * TS2775). Scenarios don't rely on flow-narrowing past the call
-   * anyway — they assert and continue.
+   * Phrased as expectations (positive: „stdout matches semver"), not
+   * failure messages — the same string makes sense in both directions.
    */
-  assert: (cond: unknown, msg: string) => void;
+  expect: (label: string, cond: unknown, details?: string) => void;
 }
 
 export interface RunScenarioOptions {
@@ -93,10 +96,27 @@ export async function runScenario(
     name,
     cli: (args) => run(args),
     cliCapture: (args) => capture(args, { allowNonZero: true }),
-    step: (label) => out.step(label),
+    step: async (label, fn) => {
+      out.stepStart(label);
+      const stepStart = Date.now();
+      try {
+        const result = await fn();
+        out.stepPass(label, Date.now() - stepStart);
+        return result;
+      } catch (err) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        out.stepFail(label, e, Date.now() - stepStart);
+        throw e;
+      }
+    },
     info: (msg) => out.info(msg),
-    assert: (cond, msg) => {
-      if (!cond) throw new Error(msg);
+    expect: (label, cond, details) => {
+      if (cond) {
+        out.check(label);
+        return;
+      }
+      const detail = details ? ` (${details})` : '';
+      throw new Error(`Expectation failed: ${label}${detail}`);
     },
   };
 
@@ -113,41 +133,47 @@ export async function runScenario(
     }
 
     if (!opts.keep) {
-      await teardown(name, out);
+      await teardown(ctx, name);
     } else {
       out.info(
         `Container \`${name}\` left running (--keep). Tear down with: monoceros remove ${name} --no-backup --yes`,
       );
     }
 
+    out.summary({
+      scenarioId: scenario.id,
+      ok: true,
+      durationMs,
+      containerName: name,
+    });
     return { ok: true, containerName: name, durationMs };
   } catch (err) {
     const durationMs = Date.now() - start;
     const error = err instanceof Error ? err : new Error(String(err));
-    out.error(
-      `Scenario \`${scenario.id}\` failed after ${(durationMs / 1000).toFixed(1)}s: ${error.message}`,
-    );
     out.info(
       `Container \`${name}\` is left running for inspection. Tear down with: monoceros remove ${name} --no-backup --yes`,
     );
+    out.summary({
+      scenarioId: scenario.id,
+      ok: false,
+      durationMs,
+      containerName: name,
+      errorMessage: error.message,
+    });
     return { ok: false, containerName: name, durationMs, error };
   }
 }
 
-async function teardown(name: string, out: Output): Promise<void> {
-  out.step(`Teardown — remove ${name}`);
-  const start = Date.now();
+async function teardown(ctx: ScenarioCtx, name: string): Promise<void> {
+  // Best-effort cleanup — never let a flaky teardown mask a passing
+  // scenario. We surface failures via stepFail (so the user sees
+  // them) but don't re-throw.
   try {
-    await run(['remove', name, '--no-backup', '--yes'], {
-      allowNonZero: true,
-    });
-    out.pass(`Teardown — remove ${name}`, Date.now() - start);
-  } catch (err) {
-    out.fail(
-      `Teardown — remove ${name}`,
-      err instanceof Error ? err : new Error(String(err)),
-      Date.now() - start,
+    await ctx.step(`Teardown — remove ${name}`, () =>
+      run(['remove', name, '--no-backup', '--yes'], { allowNonZero: true }),
     );
+  } catch {
+    /* stepFail already printed the error */
   }
 }
 
