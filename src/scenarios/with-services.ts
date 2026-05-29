@@ -1,31 +1,49 @@
 import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
 
+const FIXTURE_REPO = 'https://github.com/getmonoceros/monoceros-e2e-fixture';
+const FIXTURE_DIR = 'projects/monoceros-e2e-fixture';
+
 /**
- * `with-services` — Compose-Mode mit einem Postgres-Service-Container.
+ * `with-services` — Compose-Mode mit einem Postgres-Service-Container,
+ * inkl. echtem CRUD-Roundtrip vom Workspace aus.
  *
- * Was es prüft:
- *   - `monoceros init --with=node,postgres` materialisiert ein
- *     Compose-Profil (workspace + postgres).
- *   - `monoceros apply` fährt beide hoch.
- *   - Vom Workspace aus ist postgres unter `postgres:5432` per DNS
- *     erreichbar (Compose-Default-Netzwerk). Probe via Bash-builtin
- *     `</dev/tcp/postgres/5432` — kein Postgres-Client nötig, kein
- *     Tool-Footprint im Workspace.
- *   - `remove` räumt Compose-Stack, Volumes-Daten-Mount, yml weg.
+ * Lifecycle:
+ *   1. `monoceros init --with=node,postgres
+ *      --with-repo=…/monoceros-e2e-fixture` — Compose-Profil + Repo.
+ *   2. `monoceros apply` — workspace + postgres hochfahren, Fixture
+ *      landet unter projects/.
+ *   3. **TCP-Probe** auf `postgres:5432` aus dem Workspace, mit
+ *      30s-Retry-Loop in Bash. Fail-fast-Baseline — wenn der Port
+ *      nicht aufgeht, sparen wir uns den teureren Pfad.
+ *   4. `npm ci` für die Fixture-Deps (heute: pg).
+ *   5. **db-client-Probe**: `node db-client.mjs` — connect, CREATE
+ *      TEMP TABLE, INSERT 2, SELECT + verify, DELETE 1, count-check.
+ *      Erwartet `ok` als letzte stdout-Zeile.
+ *   6. `remove` räumt Compose-Stack, Daten-Mount, yml weg.
  *
- * Was es bewusst NICHT prüft: `SELECT 1`-Roundtrip. Das würde `psql`
- * im Workspace-Image voraussetzen. TCP-Reachability ist die ehrliche
- * baseline-Aussage.
+ * Was es prüft (in dieser Reihenfolge):
+ *   - Compose-Default-Netzwerk + DNS-Auflösung (TCP-Probe)
+ *   - npm-install-Pfad in einem geclonten Repo
+ *   - Postgres-Wire-Protokoll + Service-Credentials aus dem Catalog
+ *   - Self-cleaning TEMP-Tabelle (kein Persistenz-Setup nötig)
  */
 export const withServices: Scenario = {
   id: 'with-services',
   description:
-    'init → apply → TCP-probe postgres:5432 from workspace → remove (Compose-Mode, postgres-Service)',
-  estimatedSeconds: 120,
+    'init → apply → TCP-probe + postgres CRUD via pg → remove (Compose-Mode, postgres-Service, fixture-Repo)',
+  estimatedSeconds: 150,
   async run(ctx) {
-    await ctx.step(`init ${ctx.name} --with=node,postgres`, async () => {
-      await ctx.cli(['init', ctx.name, '--with=node,postgres']);
-    });
+    await ctx.step(
+      `init ${ctx.name} --with=node,postgres --with-repo=…/monoceros-e2e-fixture`,
+      async () => {
+        await ctx.cli([
+          'init',
+          ctx.name,
+          '--with=node,postgres',
+          `--with-repo=${FIXTURE_REPO}`,
+        ]);
+      },
+    );
 
     await ctx.step(`apply ${ctx.name}`, async () => {
       await ctx.cli(['apply', ctx.name, '--yes']);
@@ -34,20 +52,22 @@ export const withServices: Scenario = {
     await ctx.step(`workspace can reach postgres:5432 via DNS`, () =>
       probeTcpFromWorkspace(ctx, 'postgres', 5432),
     );
+
+    await ctx.step(`install fixture deps (npm ci in ${FIXTURE_DIR})`, () =>
+      installFixtureDeps(ctx),
+    );
+
+    await ctx.step(`db-client CRUD roundtrip against postgres`, () =>
+      runDbClient(ctx),
+    );
   },
 };
 
 /**
- * Run a Bash retry loop INSIDE the workspace container that tries the
- * Bash-builtin `</dev/tcp/<host>/<port>` redirect once per second for
- * up to 30 attempts. Returns when the redirect succeeds (port
- * accepting connections) or the loop exhausts (TCP not reachable).
- *
- * One `monoceros run` invocation regardless of retry count — repeatedly
- * spawning devcontainer-cli would burn 1–2s per attempt. Service
- * containers (postgres, mysql, …) typically need 5–15s to be ready
- * after the workspace is up, so 30s is comfortable headroom without
- * crossing the scenario's overall time budget.
+ * Bash retry loop INSIDE the workspace, one `monoceros run` invocation
+ * regardless of retries. 30 attempts × 1s — comfortable headroom for
+ * postgres's 5–15s typical startup, without burning devcontainer-cli
+ * spawn overhead per attempt.
  */
 async function probeTcpFromWorkspace(
   ctx: ScenarioCtx,
@@ -69,5 +89,46 @@ async function probeTcpFromWorkspace(
     result.exitCode === 0
       ? `unexpected stdout: ${result.stdout.trim()}`
       : `exit ${result.exitCode}: ${result.stderr.trim() || result.stdout.trim()}`,
+  );
+}
+
+async function installFixtureDeps(ctx: ScenarioCtx): Promise<void> {
+  const result = await ctx.cliCapture([
+    'run',
+    ctx.name,
+    '--',
+    'bash',
+    '-c',
+    `cd ${FIXTURE_DIR} && npm ci --no-audit --no-fund`,
+  ]);
+  ctx.expect(
+    'npm ci succeeded',
+    result.exitCode === 0,
+    `exit ${result.exitCode}: ${result.stderr.trim() || result.stdout.trim().slice(-400)}`,
+  );
+}
+
+async function runDbClient(ctx: ScenarioCtx): Promise<void> {
+  const result = await ctx.cliCapture([
+    'run',
+    ctx.name,
+    '--',
+    'bash',
+    '-c',
+    `cd ${FIXTURE_DIR} && node db-client.mjs`,
+  ]);
+  const tail = result.stdout.trim().split('\n').slice(-1)[0] ?? '';
+  ctx.expect(
+    'db-client exits 0',
+    result.exitCode === 0,
+    `exit ${result.exitCode}: ${result.stderr.trim() || result.stdout.trim().slice(-400)}`,
+  );
+  ctx.expect(
+    'db-client stdout ends with `ok`',
+    tail === 'ok',
+    `last line: ${JSON.stringify(tail)}`,
+  );
+  ctx.info(
+    'db-client CRUD roundtrip ok — connect, CREATE/INSERT/SELECT/DELETE.',
   );
 }
