@@ -1,0 +1,65 @@
+{
+  "name": "@getmonoceros/e2e",
+  "version": "0.1.0",
+  "description": "End-to-end scenarios for the Monoceros workbench. Maintainer-facing tool that drives a real `monoceros` installation through curated lifecycle flows (init → apply → run → remove) on the real builder machine.",
+  "keywords": [
+    "monoceros",
+    "e2e",
+    "devcontainer",
+    "test"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getmonoceros/monoceros-e2e.git"
+  },
+  "homepage": "https://github.com/getmonoceros/monoceros-e2e#readme",
+  "bugs": {
+    "url": "https://github.com/getmonoceros/monoceros-e2e/issues"
+  },
+  "type": "module",
+  "bin": {
+    "monoceros-e2e": "./dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.0.6",
+  "scripts": {
+    "start": "tsx src/bin.ts",
+    "typecheck": "tsc --build",
+    "test": "vitest run",
+    "build": "tsup",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "prepublishOnly": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "citty": "^0.2.2",
+    "consola": "^3.4.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.3",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.39.3",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^15.14.0",
+    "prettier": "^3.8.3",
+    "tsup": "^8.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^3.2.4"
+  }
+}
