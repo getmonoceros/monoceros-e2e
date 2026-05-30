@@ -1,8 +1,8 @@
-import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { E2E_DOCKER_NAME_FILTER, E2E_PREFIX } from './naming.js';
 import { run } from './cli.js';
+import { runDocker } from './docker.js';
 
 /**
  * Pre-flight cleanup. Runs BEFORE every scenario start (and before
@@ -99,66 +99,28 @@ async function removeKnownYmls(
 }
 
 async function killOrphanContainers(log: (m: string) => void): Promise<number> {
-  const ids = await dockerPsByName(E2E_DOCKER_NAME_FILTER, log);
+  const ps = await runDocker([
+    'ps',
+    '-aq',
+    '--filter',
+    `name=${E2E_DOCKER_NAME_FILTER}`,
+  ]);
+  if (ps.exitCode !== 0) {
+    log(
+      `Pre-flight: docker ps exited ${ps.exitCode}: ${ps.stderr.trim() || '<no stderr>'}`,
+    );
+    return 0;
+  }
+  const ids = ps.stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
   if (ids.length === 0) return 0;
-  await dockerRmForce(ids, log);
+  const rm = await runDocker(['rm', '-f', ...ids]);
+  if (rm.exitCode !== 0) {
+    log(
+      `Pre-flight: docker rm -f exited ${rm.exitCode}: ${rm.stderr.trim() || '<no stderr>'}`,
+    );
+  }
   return ids.length;
-}
-
-function dockerPsByName(
-  filter: string,
-  log: (m: string) => void,
-): Promise<string[]> {
-  return new Promise((resolve) => {
-    const child = spawn('docker', ['ps', '-aq', '--filter', `name=${filter}`], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (c: Buffer) => {
-      stdout += c.toString();
-    });
-    child.stderr.on('data', (c: Buffer) => {
-      stderr += c.toString();
-    });
-    child.on('error', (err) => {
-      log(`Pre-flight: docker ps failed: ${err.message}`);
-      resolve([]);
-    });
-    child.on('exit', (code) => {
-      if (code !== 0) {
-        log(`Pre-flight: docker ps exited with ${code}: ${stderr.trim()}`);
-        resolve([]);
-        return;
-      }
-      resolve(
-        stdout
-          .split('\n')
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0),
-      );
-    });
-  });
-}
-
-function dockerRmForce(ids: string[], log: (m: string) => void): Promise<void> {
-  return new Promise((resolve) => {
-    const child = spawn('docker', ['rm', '-f', ...ids], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stderr = '';
-    child.stderr.on('data', (c: Buffer) => {
-      stderr += c.toString();
-    });
-    child.on('error', (err) => {
-      log(`Pre-flight: docker rm -f failed: ${err.message}`);
-      resolve();
-    });
-    child.on('exit', (code) => {
-      if (code !== 0) {
-        log(`Pre-flight: docker rm -f exited with ${code}: ${stderr.trim()}`);
-      }
-      resolve();
-    });
-  });
 }

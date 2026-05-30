@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
 import path from 'node:path';
 import type { Scenario } from '../lib/scenario.js';
+import { runDocker } from '../lib/docker.js';
 
 /**
  * `image-mode-zombie` — regression guard for the M4-Task-9 fund.
@@ -97,31 +97,26 @@ function resolveContainerDir(name: string): string {
  * regardless of image-mode vs compose-mode — making it the most
  * reliable anchor for "containers belonging to this dev-container
  * dir". The workbench's own `monoceros remove` uses the same anchor.
+ *
+ * Throws on docker failure rather than returning `[]` silently — a
+ * permission-denied or daemon-down error has to surface, or the
+ * regression-guard assertion would happily go green on a broken
+ * setup.
  */
-function dockerPsByLabelFolder(containerDir: string): Promise<string[]> {
-  return new Promise((resolve) => {
-    const child = spawn(
-      'docker',
-      [
-        'ps',
-        '-aq',
-        '--filter',
-        `label=devcontainer.local_folder=${containerDir}`,
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'] },
+async function dockerPsByLabelFolder(containerDir: string): Promise<string[]> {
+  const result = await runDocker([
+    'ps',
+    '-aq',
+    '--filter',
+    `label=devcontainer.local_folder=${containerDir}`,
+  ]);
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `docker ps exited ${result.exitCode}: ${result.stderr.trim() || '<no stderr>'}`,
     );
-    let stdout = '';
-    child.stdout.on('data', (c: Buffer) => {
-      stdout += c.toString();
-    });
-    child.on('error', () => resolve([]));
-    child.on('exit', () =>
-      resolve(
-        stdout
-          .split('\n')
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0),
-      ),
-    );
-  });
+  }
+  return result.stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
