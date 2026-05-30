@@ -4,6 +4,7 @@ import { withServices } from './with-services.js';
 import { withPort } from './with-port.js';
 import { addRepo } from './add-repo.js';
 import { withMutations } from './with-mutations.js';
+import { withTunnel } from './with-tunnel.js';
 
 /**
  * Single source of truth for the available scenarios. `monoceros-e2e
@@ -19,6 +20,7 @@ export const SCENARIOS: Scenario[] = [
   withPort,
   addRepo,
   withMutations,
+  withTunnel,
 ];
 
 export function findScenario(id: string): Scenario | undefined {
