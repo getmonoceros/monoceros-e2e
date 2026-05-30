@@ -184,12 +184,22 @@ async function teardown(_ctx: ScenarioCtx, name: string): Promise<void> {
   if (!existsSync(ymlPath)) {
     return;
   }
-  // Best-effort cleanup — never let a flaky teardown mask a passing
-  // scenario. We surface failures via stepFail (so the user sees
-  // them) but don't re-throw.
+  // Best-effort cleanup. If `monoceros remove` exits non-zero, the
+  // step marker shows ✗ FAILED with the real error — but we catch
+  // the throw here so the scenario's overall result isn't flipped
+  // by a cleanup hiccup. The tests passed; the aftermath had issues
+  // worth surfacing, not worth retracting the result. Pre-Flight on
+  // the next run mops up what the framework couldn't.
+  //
+  // Common Linux quirk this catches: postgres service writes
+  // /var/lib/postgresql as root (its container UID), the host's
+  // bind-mount mirrors those permissions, and the unprivileged
+  // monoceros remove can't rmdir the data/postgres/ tree. The step
+  // shows ✗ FAILED with the EACCES line, the maintainer sees it,
+  // the test result stays honest.
   try {
     await _ctx.step(`Teardown — remove ${name}`, () =>
-      run(['remove', name, '--no-backup', '--yes'], { allowNonZero: true }),
+      run(['remove', name, '--no-backup', '--yes']),
     );
   } catch {
     /* stepFail already printed the error */
