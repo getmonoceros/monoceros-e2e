@@ -5,6 +5,7 @@ import { withPort } from './with-port.js';
 import { addRepo } from './add-repo.js';
 import { withMutations } from './with-mutations.js';
 import { withTunnel } from './with-tunnel.js';
+import { imageModeZombie } from './image-mode-zombie.js';
 
 /**
  * Single source of truth for the available scenarios. `monoceros-e2e
@@ -21,6 +22,7 @@ export const SCENARIOS: Scenario[] = [
   addRepo,
   withMutations,
   withTunnel,
+  imageModeZombie,
 ];
 
 export function findScenario(id: string): Scenario | undefined {

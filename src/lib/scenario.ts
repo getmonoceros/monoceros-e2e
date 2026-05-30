@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { run, capture } from './cli.js';
 import { makeOutput, type Output } from './output.js';
 import { scenarioContainerName } from './naming.js';
@@ -164,12 +166,29 @@ export async function runScenario(
   }
 }
 
-async function teardown(ctx: ScenarioCtx, name: string): Promise<void> {
+async function teardown(_ctx: ScenarioCtx, name: string): Promise<void> {
+  // Some scenarios call `monoceros remove` themselves as part of
+  // the test body (e.g. image-mode-zombie). In that case there's
+  // nothing left for the framework to clean up — calling remove
+  // again would print "Nothing to remove" to stderr, which reads
+  // as an ERROR even though the scenario passed. Pre-check by
+  // looking for the yml profile: if it's gone, the scenario body
+  // already cleaned up and the framework teardown is a no-op.
+  const home =
+    process.env.MONOCEROS_HOME?.trim() ||
+    path.join(
+      process.env.HOME ?? process.env.USERPROFILE ?? '/tmp',
+      '.monoceros',
+    );
+  const ymlPath = path.join(home, 'container-configs', `${name}.yml`);
+  if (!existsSync(ymlPath)) {
+    return;
+  }
   // Best-effort cleanup — never let a flaky teardown mask a passing
   // scenario. We surface failures via stepFail (so the user sees
   // them) but don't re-throw.
   try {
-    await ctx.step(`Teardown — remove ${name}`, () =>
+    await _ctx.step(`Teardown — remove ${name}`, () =>
       run(['remove', name, '--no-backup', '--yes'], { allowNonZero: true }),
     );
   } catch {
