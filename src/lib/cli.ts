@@ -84,9 +84,12 @@ function findOnPath(name: string): string | null {
  * point it would have invoked, and spawn the current node binary on
  * that entry directly. Node ↔ node, no shell, no quoting hell.
  *
- * The npm-generated shim has two parallel branches (IF EXIST
- * %~dp0\node.exe / ELSE bare `node`); both reference the same
- * `"%~dp0\…\bin.js"`, so a single regex finds it.
+ * The npm-generated shim references the JS entry as either
+ *   "%~dp0\…\bin.js"   (older npm)
+ * or
+ *   "%dp0%\…\bin.js"   (npm v10+, uses CALL :find_dp0 indirection
+ *                        so paths with parentheses don't break)
+ * One regex handles both.
  */
 function resolveInvocation(name: string): ResolvedInvocation {
   if (process.platform !== 'win32') return { command: name, prependArgs: [] };
@@ -101,7 +104,7 @@ function resolveInvocation(name: string): ResolvedInvocation {
   } catch {
     return { command: cmdPath, prependArgs: [] };
   }
-  const match = content.match(/"%~dp0[\\/]([^"]+?\.js)"/i);
+  const match = content.match(/"%~?dp0%?[\\/]([^"]+?\.js)"/i);
   const captured = match?.[1];
   if (!captured) return { command: cmdPath, prependArgs: [] };
 
