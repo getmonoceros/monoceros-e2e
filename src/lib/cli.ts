@@ -31,6 +31,13 @@ export interface CliOptions {
   allowNonZero?: boolean;
 }
 
+// On Windows npm installs `monoceros.cmd` (cmd.exe shim) — there is
+// no bare `monoceros.exe`. Node's spawn on Windows does NOT consult
+// PATHEXT, so `spawn('monoceros', …)` fails with ENOENT even when
+// the .cmd is on PATH. Setting `shell: true` delegates to cmd.exe,
+// which DOES use PATHEXT and finds the shim. No-op everywhere else.
+const SHELL_FOR_BIN_LOOKUP = process.platform === 'win32';
+
 /** Run `monoceros …` with streaming stdio. Returns the exit code. */
 export async function run(
   args: string[],
@@ -41,6 +48,7 @@ export async function run(
     const child = spawn(bin, args, {
       stdio: 'inherit',
       env: opts.env ?? process.env,
+      shell: SHELL_FOR_BIN_LOOKUP,
     });
     child.on('error', reject);
     child.on('exit', (code) => {
@@ -73,6 +81,7 @@ export async function capture(
     const child = spawn(bin, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: opts.env ?? process.env,
+      shell: SHELL_FOR_BIN_LOOKUP,
     });
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
