@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -33,27 +33,18 @@ export interface CliOptions {
   allowNonZero?: boolean;
 }
 
+interface ResolvedInvocation {
+  /** Process to spawn. */
+  command: string;
+  /** Args to prepend before the caller's args. */
+  prependArgs: readonly string[];
+}
+
 /**
- * Resolve a bare command name (`monoceros`) to the absolute path of
- * the runnable shim on Windows. npm installs `monoceros.cmd` (cmd.exe
- * shim) alongside `.ps1` and a bash shim, but Node's spawn on Windows
- * does NOT walk PATHEXT to auto-discover the .cmd. We do it ourselves.
- *
- * Why not `shell: true`. That's the obvious alternative — let cmd.exe
- * resolve via PATHEXT — but cmd.exe also interprets the args. Our
- * scenarios pass bash scripts (e.g. the postgres probe contains
- * `</dev/tcp/...`) where the `<` is a cmd.exe redirect operator and
- * gets eaten before bash ever sees it. Spawning the resolved `.cmd`
- * path directly avoids cmd.exe's arg interpretation: Node 20+'s safe
- * `.cmd` handling (post CVE-2024-27980) wraps the args in quotes
- * before handing to cmd.exe, neutralizing the special chars.
- *
- * No-op everywhere else: returns `name` unchanged on macOS / Linux,
- * and returns it unchanged if it already carries an extension.
+ * Walk PATH × PATHEXT for `<name><ext>` and return the first hit, or
+ * null if the binary isn't on PATH.
  */
-function resolveBinPath(name: string): string {
-  if (process.platform !== 'win32') return name;
-  if (path.extname(name)) return name;
+function findOnPath(name: string): string | null {
   const pathExts = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(
     path.delimiter,
   );
@@ -69,7 +60,55 @@ function resolveBinPath(name: string): string {
       }
     }
   }
-  return name; // fallback — spawn will ENOENT, but with a clear name
+  return null;
+}
+
+/**
+ * Resolve how to invoke `monoceros` on the current platform.
+ *
+ * On macOS / Linux: spawn `name` directly, no transform.
+ *
+ * On Windows: this is the rabbit hole. npm installs `monoceros.cmd`
+ * (cmd.exe shim) plus a `.ps1` and a bash shim — no bare
+ * `monoceros.exe`. Two paths both have problems:
+ *
+ *   - Spawn the .cmd directly: Node 20+ throws EINVAL synchronously
+ *     for batch files (post CVE-2024-27980 lockdown).
+ *   - Spawn with `shell: true`: works around the EINVAL but now
+ *     cmd.exe is in the call chain and interprets our args. Our
+ *     scenarios pass bash scripts like `</dev/tcp/postgres/5432`,
+ *     where `<` is a cmd.exe redirect operator -- the script never
+ *     reaches the container.
+ *
+ * Bypass cmd.exe entirely: parse the .cmd shim, extract the JS entry
+ * point it would have invoked, and spawn the current node binary on
+ * that entry directly. Node ↔ node, no shell, no quoting hell.
+ *
+ * The npm-generated shim has two parallel branches (IF EXIST
+ * %~dp0\node.exe / ELSE bare `node`); both reference the same
+ * `"%~dp0\…\bin.js"`, so a single regex finds it.
+ */
+function resolveInvocation(name: string): ResolvedInvocation {
+  if (process.platform !== 'win32') return { command: name, prependArgs: [] };
+  if (path.extname(name)) return { command: name, prependArgs: [] };
+
+  const cmdPath = findOnPath(name);
+  if (!cmdPath) return { command: name, prependArgs: [] };
+
+  let content: string;
+  try {
+    content = readFileSync(cmdPath, 'utf8');
+  } catch {
+    return { command: cmdPath, prependArgs: [] };
+  }
+  const match = content.match(/"%~dp0[\\/]([^"]+?\.js)"/i);
+  const captured = match?.[1];
+  if (!captured) return { command: cmdPath, prependArgs: [] };
+
+  const binJs = path.join(path.dirname(cmdPath), captured);
+  if (!existsSync(binJs)) return { command: cmdPath, prependArgs: [] };
+
+  return { command: process.execPath, prependArgs: [binJs] };
 }
 
 /** Run `monoceros …` with streaming stdio. Returns the exit code. */
@@ -78,9 +117,9 @@ export async function run(
   opts: CliOptions = {},
 ): Promise<number> {
   const bin = opts.bin ?? 'monoceros';
-  const resolvedBin = resolveBinPath(bin);
+  const { command, prependArgs } = resolveInvocation(bin);
   return new Promise((resolve, reject) => {
-    const child = spawn(resolvedBin, args, {
+    const child = spawn(command, [...prependArgs, ...args], {
       stdio: 'inherit',
       env: opts.env ?? process.env,
     });
@@ -109,11 +148,11 @@ export async function capture(
   opts: CliOptions = {},
 ): Promise<CliResult> {
   const bin = opts.bin ?? 'monoceros';
-  const resolvedBin = resolveBinPath(bin);
+  const { command, prependArgs } = resolveInvocation(bin);
   return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
-    const child = spawn(resolvedBin, args, {
+    const child = spawn(command, [...prependArgs, ...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: opts.env ?? process.env,
     });
