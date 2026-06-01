@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { resolveInvocation } from './cli.js';
 
 /**
  * Host-side helper to run a long-lived `monoceros …` command in the
@@ -35,8 +34,6 @@ export interface BackgroundCliHandle {
   readStderr: () => string;
 }
 
-const IS_WINDOWS = process.platform === 'win32';
-
 /**
  * Spawn `monoceros …` in the background and return a handle. The
  * returned promise resolves AFTER the `warmupMs` grace period (default
@@ -44,26 +41,12 @@ const IS_WINDOWS = process.platform === 'win32';
  * had a moment to come up". If the process exits before warmup
  * finishes, the promise rejects with the captured stderr.
  *
- * Unix: spawned `detached: true` so the child gets its own process
- * group; `signal()` does `process.kill(-pgid, sig)`, reaching both
- * monoceros tunnel and its docker-run grandchild like terminal
- * Ctrl+C does. Sending the signal to the parent PID alone would be
- * swallowed by the parent's signal handler and never reach the
- * docker-run child.
- *
- * Windows: there are no POSIX process groups, and `detached: true`
- * would open a new console window. We spawn without detached and
- * tear the process tree down with `taskkill /T /F /PID <pid>`
- * (`/T` = also kill child processes). Signal semantics on Windows
- * are inherently more abrupt — Node's `child.kill('SIGINT')` maps
- * to TerminateProcess, not a graceful Ctrl+C — so the docker-run
- * grandchild is killed hard. Acceptable for e2e teardown; the
- * docker daemon cleans up the started container on its side.
- *
- * Both platforms resolve `monoceros` through the same shim-parsing
- * logic the foreground helpers use, so the bare command name finds
- * its way to the right node + bin.js invocation on Windows where
- * npm installs `monoceros.cmd` only.
+ * Spawned `detached: true` so the child gets its own process group.
+ * Signals via `signal()` go to the WHOLE group (`process.kill(-pgid,
+ * sig)`) — that's what mimics terminal Ctrl+C, which is what
+ * `monoceros tunnel` (and similar foreground-CLI patterns) expects.
+ * Sending the signal to the parent PID alone would be swallowed by
+ * the parent's signal handler and never reach the docker-run child.
  */
 export async function startBackground(
   args: string[],
@@ -72,11 +55,10 @@ export async function startBackground(
   const bin = opts.bin ?? 'monoceros';
   const warmupMs = opts.warmupMs ?? 1500;
 
-  const { command, prependArgs } = resolveInvocation(bin);
-  const child: ChildProcess = spawn(command, [...prependArgs, ...args], {
+  const child: ChildProcess = spawn(bin, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: process.env,
-    detached: !IS_WINDOWS,
+    detached: true,
   });
 
   let stdout = '';
@@ -131,29 +113,8 @@ export async function startBackground(
       if (exited !== null) return;
       const pid = child.pid;
       if (pid === undefined) return;
-      if (IS_WINDOWS) {
-        // Windows: no POSIX process groups, so `process.kill(-pid)`
-        // would throw EINVAL. Use taskkill /T to walk the process
-        // tree and /F to terminate forcibly (docker-run as a child
-        // doesn't react to SIGINT semantics on Windows anyway).
-        // Fire-and-forget — we capture exit through the existing
-        // child.on('exit', …) wiring.
-        try {
-          spawn('taskkill', ['/T', '/F', '/PID', String(pid)], {
-            stdio: 'ignore',
-            windowsHide: true,
-          });
-        } catch {
-          try {
-            child.kill();
-          } catch {
-            /* already gone */
-          }
-        }
-        return;
-      }
       try {
-        // Unix: negative PID = signal the whole process group.
+        // Negative PID = signal the whole process group.
         // detached spawn put the child at the head of its own group,
         // so this reaches both `monoceros tunnel` and its docker-run
         // grandchild, mirroring terminal Ctrl+C semantics.

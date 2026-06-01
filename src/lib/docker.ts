@@ -69,26 +69,3 @@ function spawnRaw(bin: string, args: string[]): Promise<DockerResult> {
 function joinShellArgs(argv: string[]): string {
   return argv.map((a) => `'${a.replace(/'/g, `'\\''`)}'`).join(' ');
 }
-
-/**
- * Normalize a host filesystem path into the form @devcontainers/cli
- * stamps in the `devcontainer.local_folder` Docker label. On Windows
- * the cli lowercases the drive letter (`C:\…` → `c:\…`) before
- * writing it, and Docker `--filter label=…=<value>` does a byte-exact
- * match — feeding it our untouched path.join-built `C:\…` silently
- * misses every container.
- *
- * Mirrors the helper of the same name in the workbench
- * (packages/cli/src/devcontainer/compose.ts). Duplicated here on
- * purpose: e2e imports nothing from the workbench package by design
- * (see e2e CLAUDE.md → „Was bewusst nicht als Dependency drin ist").
- *
- * No-op off Windows.
- */
-export function dockerLocalFolderLabel(p: string): string {
-  if (process.platform !== 'win32') return p;
-  return p.replace(
-    /^([A-Z]):/,
-    (_, drive: string) => `${drive.toLowerCase()}:`,
-  );
-}
