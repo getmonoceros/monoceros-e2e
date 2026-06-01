@@ -192,8 +192,28 @@ interface ProbeBody {
 }
 
 function fetchJson(url: string): Promise<ProbeBody> {
+  // Connect to 127.0.0.1 explicitly and pass the original hostname as
+  // the Host header. Why: WSL Ubuntu's default /etc/resolv.conf
+  // points at the Windows-side resolver, which does NOT auto-resolve
+  // `*.localhost` to 127.0.0.1 — `http.request` then errors with
+  // ENOTFOUND. Native Linux (systemd-resolved) and macOS (mDNSResponder)
+  // do honor RFC 6761 here, but going through 127.x + explicit Host
+  // header is identical-wire-behavior on all three (Traefik routes by
+  // Host header regardless of which interface the connection arrived
+  // on), so this branch is unconditional.
+  const parsed = new URL(url);
+  const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+  const hostHeader = parsed.port ? `${parsed.hostname}:${port}` : parsed.hostname;
   return new Promise((resolve, reject) => {
-    const req = httpRequest(url, { method: 'GET' }, (res: IncomingMessage) => {
+    const req = httpRequest(
+      {
+        host: '127.0.0.1',
+        port: Number(port),
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        headers: { Host: hostHeader },
+      },
+      (res: IncomingMessage) => {
       let data = '';
       res.on('data', (chunk: Buffer) => {
         data += chunk.toString();
