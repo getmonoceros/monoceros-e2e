@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { Scenario } from '../lib/scenario.js';
-import { runDocker } from '../lib/docker.js';
+import { dockerLocalFolderLabel, runDocker } from '../lib/docker.js';
 
 /**
  * `image-mode-zombie` — regression guard for the M4-Task-9 fund.
@@ -108,7 +108,10 @@ async function dockerPsByLabelFolder(containerDir: string): Promise<string[]> {
     'ps',
     '-aq',
     '--filter',
-    `label=devcontainer.local_folder=${containerDir}`,
+    // dockerLocalFolderLabel() lowercases the drive letter on Windows
+    // to match what @devcontainers/cli stamps (`c:\…` vs our
+    // `path.join`-built `C:\…`); docker filters are byte-exact.
+    `label=devcontainer.local_folder=${dockerLocalFolderLabel(containerDir)}`,
   ]);
   if (result.exitCode !== 0) {
     throw new Error(
