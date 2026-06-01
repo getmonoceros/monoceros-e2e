@@ -33,7 +33,7 @@ export interface CliOptions {
   allowNonZero?: boolean;
 }
 
-interface ResolvedInvocation {
+export interface ResolvedInvocation {
   /** Process to spawn. */
   command: string;
   /** Args to prepend before the caller's args. */
@@ -91,7 +91,7 @@ function findOnPath(name: string): string | null {
  *                        so paths with parentheses don't break)
  * One regex handles both.
  */
-function resolveInvocation(name: string): ResolvedInvocation {
+export function resolveInvocation(name: string): ResolvedInvocation {
   if (process.platform !== 'win32') return { command: name, prependArgs: [] };
   if (path.extname(name)) return { command: name, prependArgs: [] };
 
