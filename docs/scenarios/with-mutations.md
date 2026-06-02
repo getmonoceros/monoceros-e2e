@@ -7,7 +7,7 @@ verifiziert.
 
 ## Was es prüft
 
-1. **`monoceros init <name> --with=node`** + **`apply`** — Baseline-
+1. **`monoceros init <name> --with-languages=node`** + **`apply`** — Baseline-
    Container hochgefahren.
 2. **`monoceros add-apt-packages <name> -- jq`** — yml-Mutation für
    apt-Pakete (mehrfach komma-separiert möglich, aber wir prüfen

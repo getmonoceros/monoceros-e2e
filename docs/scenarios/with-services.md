@@ -8,8 +8,8 @@ substantieller Beweis.
 
 In dieser Reihenfolge:
 
-1. **`monoceros init <name> --with=node,postgres
---with-repo=…/monoceros-e2e-fixture`** schreibt eine yml mit
+1. **`monoceros init <name> --with-languages=node --with-services=postgres
+--with-repos=…/monoceros-e2e-fixture`** schreibt eine yml mit
    Compose-Services und einer Repo-Referenz. Beweist init + Schema.
 2. **`monoceros apply <name>`** fährt workspace + postgres hoch und
    klont den Fixture-Repo nach `projects/monoceros-e2e-fixture/`.
@@ -38,7 +38,7 @@ In dieser Reihenfolge:
 
 ## Voraussetzung
 
-- `monoceros` auf PATH, Workbench 1.6.0+ (für `--with-repo`).
+- `monoceros` auf PATH, Workbench 1.6.0+ (für `--with-repos`).
 - Docker-Daemon mit Compose v2.
 - Internet-Zugriff (HTTPS-Clone des Fixture-Repos, `npm install`).
 

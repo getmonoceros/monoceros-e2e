@@ -36,9 +36,9 @@ export const withPort: Scenario = {
       await ctx.cli([
         'init',
         a,
-        '--with=node',
+        '--with-languages=node',
         '--with-ports=3000',
-        `--with-repo=${FIXTURE_REPO}`,
+        `--with-repos=${FIXTURE_REPO}`,
       ]);
     });
 
@@ -46,9 +46,9 @@ export const withPort: Scenario = {
       await ctx.cli([
         'init',
         b,
-        '--with=node',
+        '--with-languages=node',
         '--with-ports=3000',
-        `--with-repo=${FIXTURE_REPO}`,
+        `--with-repos=${FIXTURE_REPO}`,
       ]);
     });
 

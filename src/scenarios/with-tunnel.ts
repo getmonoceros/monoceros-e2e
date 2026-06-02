@@ -25,8 +25,8 @@ export const withTunnel: Scenario = {
     'init → apply → monoceros tunnel (background) → TCP-probe 127.0.0.1:5432 from host → teardown',
   estimatedSeconds: 120,
   async run(ctx) {
-    await ctx.step(`init ${ctx.name} --with=node,postgres`, () =>
-      ctx.cli(['init', ctx.name, '--with=node,postgres']),
+    await ctx.step(`init ${ctx.name} --with-languages=node --with-services=postgres`, () =>
+      ctx.cli(['init', ctx.name, '--with-languages=node', '--with-services=postgres']),
     );
 
     await ctx.step(`apply ${ctx.name}`, () =>

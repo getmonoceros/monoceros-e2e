@@ -4,7 +4,7 @@ import type { Scenario } from '../lib/scenario.js';
  * `minimal` — der schmälste sinnvolle Lifecycle-Beweis.
  *
  * Was es prüft:
- *   - `monoceros init --with=node`  → yml landet im container-configs
+ *   - `monoceros init --with-languages=node`  → yml landet im container-configs
  *   - `monoceros apply`             → Container fährt hoch (Image-Mode,
  *                                     keine Services)
  *   - `monoceros run -- node …`     → das Workspace-Image bringt Node mit
@@ -19,8 +19,8 @@ export const minimal: Scenario = {
     'init → apply → run -- node --version → remove (Image-Mode, keine Services)',
   estimatedSeconds: 60,
   async run(ctx) {
-    await ctx.step(`init ${ctx.name} --with=node`, async () => {
-      await ctx.cli(['init', ctx.name, '--with=node']);
+    await ctx.step(`init ${ctx.name} --with-languages=node`, async () => {
+      await ctx.cli(['init', ctx.name, '--with-languages=node']);
     });
 
     await ctx.step(`apply ${ctx.name}`, async () => {

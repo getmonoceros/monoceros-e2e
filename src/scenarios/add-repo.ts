@@ -6,7 +6,7 @@ const FIXTURE_DIR = 'projects/monoceros-e2e-fixture';
 /**
  * `add-repo` — proves the on-the-fly clone path.
  *
- * Distinct from `--with-repo` (init-time clone, exercised by
+ * Distinct from `--with-repos` (init-time clone, exercised by
  * with-services / with-port): `monoceros add-repo` updates the yml
  * AND tries to clone into the **running** container in the same call,
  * no re-apply needed. Two code paths, both worth proving.
@@ -24,8 +24,8 @@ export const addRepo: Scenario = {
     'init → apply → add-repo (on-the-fly clone) → in-container serve-ports probe → remove',
   estimatedSeconds: 90,
   async run(ctx) {
-    await ctx.step(`init ${ctx.name} --with=node (NO --with-repo)`, () =>
-      ctx.cli(['init', ctx.name, '--with=node']),
+    await ctx.step(`init ${ctx.name} --with-languages=node (NO --with-repos)`, () =>
+      ctx.cli(['init', ctx.name, '--with-languages=node']),
     );
 
     await ctx.step(`apply ${ctx.name}`, () =>

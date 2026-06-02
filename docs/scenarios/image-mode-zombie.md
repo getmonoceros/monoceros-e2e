@@ -4,7 +4,7 @@ Regression-Guard für den M4-Task-9-Fund.
 
 ## Hintergrund
 
-Image-Mode-Dev-Container (kein Compose — z. B. nur `--with=node`)
+Image-Mode-Dev-Container (kein Compose — z. B. nur `--with-languages=node`)
 sind früher nach `monoceros remove` als Zombies in `docker ps -a`
 übriggeblieben. Ursache: die `remove`-Pipeline hat ausschließlich
 über das Label `com.docker.compose.project` gefiltert, das es bei
@@ -15,7 +15,7 @@ genauso wie Compose-Mode. Dieses Szenario hält den Fix ehrlich.
 
 ## Was es prüft
 
-1. **`monoceros init <name> --with=node`** — strikt Image-Mode,
+1. **`monoceros init <name> --with-languages=node`** — strikt Image-Mode,
    keine Services.
 2. **`monoceros apply <name>`** — Container läuft.
 3. **Sanity-Check**: `docker ps -aq --filter

@@ -25,8 +25,8 @@ export const withMutations: Scenario = {
     'init → apply → add-apt-packages jq → add-feature github → re-apply → jq + gh verify',
   estimatedSeconds: 180,
   async run(ctx) {
-    await ctx.step(`init ${ctx.name} --with=node`, () =>
-      ctx.cli(['init', ctx.name, '--with=node']),
+    await ctx.step(`init ${ctx.name} --with-languages=node`, () =>
+      ctx.cli(['init', ctx.name, '--with-languages=node']),
     );
 
     await ctx.step(`apply ${ctx.name} (initial)`, () =>

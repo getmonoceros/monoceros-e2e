@@ -8,8 +8,8 @@ const FIXTURE_DIR = 'projects/monoceros-e2e-fixture';
  * inkl. echtem CRUD-Roundtrip vom Workspace aus.
  *
  * Lifecycle:
- *   1. `monoceros init --with=node,postgres
- *      --with-repo=…/monoceros-e2e-fixture` — Compose-Profil + Repo.
+ *   1. `monoceros init --with-languages=node --with-services=postgres
+ *      --with-repos=…/monoceros-e2e-fixture` — Compose-Profil + Repo.
  *   2. `monoceros apply` — workspace + postgres hochfahren, Fixture
  *      landet unter projects/.
  *   3. **TCP-Probe** auf `postgres:5432` aus dem Workspace, mit
@@ -34,13 +34,13 @@ export const withServices: Scenario = {
   estimatedSeconds: 150,
   async run(ctx) {
     await ctx.step(
-      `init ${ctx.name} --with=node,postgres --with-repo=…/monoceros-e2e-fixture`,
+      `init ${ctx.name} --with-languages=node --with-services=postgres --with-repos=…/monoceros-e2e-fixture`,
       async () => {
         await ctx.cli([
           'init',
           ctx.name,
-          '--with=node,postgres',
-          `--with-repo=${FIXTURE_REPO}`,
+          '--with-languages=node', '--with-services=postgres',
+          `--with-repos=${FIXTURE_REPO}`,
         ]);
       },
     );

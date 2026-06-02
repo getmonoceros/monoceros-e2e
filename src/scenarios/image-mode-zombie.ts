@@ -6,7 +6,7 @@ import { runDocker } from '../lib/docker.js';
  * `image-mode-zombie` — regression guard for the M4-Task-9 fund.
  *
  * Background: image-mode dev containers (no Compose, e.g.
- * `--with=node` only) once survived `monoceros remove` because the
+ * `--with-languages=node` only) once survived `monoceros remove` because the
  * old remove pipeline filtered by `com.docker.compose.project`, which
  * doesn't apply to plain `docker run`-style containers. They were
  * left as zombies in `docker ps -a`. The fix used the
@@ -14,7 +14,7 @@ import { runDocker } from '../lib/docker.js';
  * scenario keeps that fix honest.
  *
  * Flow:
- *   1. `init --with=node` — image-mode, NO services.
+ *   1. `init --with-languages=node` — image-mode, NO services.
  *   2. `apply` — container running.
  *   3. Assert a docker container exists under the local_folder label
  *      (so the rest of the scenario isn't probing nothing).
@@ -34,8 +34,8 @@ export const imageModeZombie: Scenario = {
   estimatedSeconds: 90,
   async run(ctx) {
     await ctx.step(
-      `init ${ctx.name} --with=node (image-mode, no services)`,
-      () => ctx.cli(['init', ctx.name, '--with=node']),
+      `init ${ctx.name} --with-languages=node (image-mode, no services)`,
+      () => ctx.cli(['init', ctx.name, '--with-languages=node']),
     );
 
     await ctx.step(`apply ${ctx.name}`, () =>

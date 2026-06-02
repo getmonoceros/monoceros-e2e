@@ -4,7 +4,7 @@ Der schmälste sinnvolle Lifecycle-Beweis.
 
 ## Was es prüft
 
-- `monoceros init <name> --with=node` schreibt die yml.
+- `monoceros init <name> --with-languages=node` schreibt die yml.
 - `monoceros apply <name>` fährt einen Image-Mode-Container hoch
   (keine Compose-Services).
 - `monoceros run <name> -- node --version` zeigt, dass das Workspace-

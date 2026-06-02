@@ -1,12 +1,12 @@
 # Szenario `add-repo`
 
 Beweist den **on-the-fly Clone-Pfad** von `monoceros add-repo` —
-unterschiedlich zum init-time-Clone via `--with-repo`, den
+unterschiedlich zum init-time-Clone via `--with-repos`, den
 `with-services` und `with-port` schon abdecken.
 
 ## Was es prüft
 
-1. **`monoceros init <name> --with=node`** ohne `--with-repo` —
+1. **`monoceros init <name> --with-languages=node`** ohne `--with-repos` —
    reiner Image-Mode-Container, kein Repo in der yml.
 2. **`monoceros apply <name>`** fährt den Container hoch.
 3. **`monoceros add-repo <name> …/monoceros-e2e-fixture`** —
@@ -33,7 +33,7 @@ der Proxy ins Spiel kommt.
 ## Was es _nicht_ prüft
 
 - Kein Traefik-Routing (siehe `with-port`).
-- Kein init-time-Clone via `--with-repo` (siehe `with-services`).
+- Kein init-time-Clone via `--with-repos` (siehe `with-services`).
 - Keine HTTPS-Auth bei privaten Repos — die Fixture ist public.
 - Kein `add-repo` _vor_ dem ersten Apply (sondern danach, dann
   on-the-fly).

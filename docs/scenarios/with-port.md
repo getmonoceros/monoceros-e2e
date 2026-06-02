@@ -8,7 +8,7 @@ Zwei parallel laufende Container hinter dem Traefik-Singleton, mit
 In dieser Reihenfolge:
 
 1. **Init + apply** für zwei Container mit identischer Konfig
-   (`--with=node --with-ports=3000`) und dem gleichen Fixture-Repo.
+   (`--with-languages=node --with-ports=3000`) und dem gleichen Fixture-Repo.
 2. **`serve-ports.mjs`** läuft in beiden mit den Ports 3000 _und_
    5173 — 5173 ist noch nicht geroutet, aber der Prozess hört schon
    mit. Damit kann der spätere `add-port` ohne Service-Neustart die

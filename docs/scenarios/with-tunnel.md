@@ -5,7 +5,7 @@ aus starten und gegen die lokale Tunnel-Listen-Adresse TCP-proben.
 
 ## Was es prüft
 
-1. **`monoceros init <name> --with=node,postgres`** + **`apply`** —
+1. **`monoceros init <name> --with-languages=node --with-services=postgres`** + **`apply`** —
    Compose-Mode-Container mit postgres läuft.
 2. **Baseline-Probe**: `</dev/tcp/postgres/5432` aus dem Workspace,
    30s-Retry-Loop. Stellt sicher, dass postgres bereit ist, bevor
