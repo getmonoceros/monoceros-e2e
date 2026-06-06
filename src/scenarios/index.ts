@@ -7,6 +7,7 @@ import { withMutations } from './with-mutations.js';
 import { withTunnel } from './with-tunnel.js';
 import { withBriefing } from './with-briefing.js';
 import { imageModeZombie } from './image-mode-zombie.js';
+import { upgrade } from './upgrade.js';
 
 /**
  * Single source of truth for the available scenarios. `monoceros-e2e
@@ -25,6 +26,7 @@ export const SCENARIOS: Scenario[] = [
   withTunnel,
   withBriefing,
   imageModeZombie,
+  upgrade,
 ];
 
 export function findScenario(id: string): Scenario | undefined {
