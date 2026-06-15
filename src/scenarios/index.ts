@@ -7,6 +7,7 @@ import { withPgvector } from './with-pgvector.js';
 import { withMongodb } from './with-mongodb.js';
 import { withRustfs } from './with-rustfs.js';
 import { withMailpit } from './with-mailpit.js';
+import { withFeatures } from './with-features.js';
 import { withPort } from './with-port.js';
 import { addRepo } from './add-repo.js';
 import { withMutations } from './with-mutations.js';
@@ -32,6 +33,7 @@ export const SCENARIOS: Scenario[] = [
   withMongodb,
   withRustfs,
   withMailpit,
+  withFeatures,
   withPort,
   addRepo,
   withMutations,
