@@ -1,6 +1,8 @@
 import type { Scenario } from '../lib/scenario.js';
 import { minimal } from './minimal.js';
 import { withServices } from './with-services.js';
+import { withMysql } from './with-mysql.js';
+import { withRedis } from './with-redis.js';
 import { withPgvector } from './with-pgvector.js';
 import { withMongodb } from './with-mongodb.js';
 import { withRustfs } from './with-rustfs.js';
@@ -24,6 +26,8 @@ import { upgrade } from './upgrade.js';
 export const SCENARIOS: Scenario[] = [
   minimal,
   withServices,
+  withMysql,
+  withRedis,
   withPgvector,
   withMongodb,
   withRustfs,
