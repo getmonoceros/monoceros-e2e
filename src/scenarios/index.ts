@@ -1,6 +1,10 @@
 import type { Scenario } from '../lib/scenario.js';
 import { minimal } from './minimal.js';
 import { withServices } from './with-services.js';
+import { withPgvector } from './with-pgvector.js';
+import { withMongodb } from './with-mongodb.js';
+import { withRustfs } from './with-rustfs.js';
+import { withMailpit } from './with-mailpit.js';
 import { withPort } from './with-port.js';
 import { addRepo } from './add-repo.js';
 import { withMutations } from './with-mutations.js';
@@ -20,6 +24,10 @@ import { upgrade } from './upgrade.js';
 export const SCENARIOS: Scenario[] = [
   minimal,
   withServices,
+  withPgvector,
+  withMongodb,
+  withRustfs,
+  withMailpit,
   withPort,
   addRepo,
   withMutations,
