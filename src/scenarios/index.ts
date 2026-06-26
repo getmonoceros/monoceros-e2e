@@ -18,6 +18,8 @@ import { withLaunch } from './with-launch.js';
 import { withBriefing } from './with-briefing.js';
 import { imageModeZombie } from './image-mode-zombie.js';
 import { upgrade } from './upgrade.js';
+import { portConflict } from './port-conflict.js';
+import { altHostport } from './alt-hostport.js';
 
 /**
  * Single source of truth for the available scenarios. `monoceros-e2e
@@ -47,6 +49,8 @@ export const SCENARIOS: Scenario[] = [
   withBriefing,
   imageModeZombie,
   upgrade,
+  portConflict,
+  altHostport,
 ];
 
 export function findScenario(id: string): Scenario | undefined {
