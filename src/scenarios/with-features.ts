@@ -15,22 +15,28 @@ import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
  *     instructions + external_directory). Guards the connectionEnv-class
  *     of regression on the feature side.
  *
- * Auth/login is out of scope (needs real tokens); the atlassian feature's
- * login hooks no-op without credentials, so acli/twg still install.
+ * Auth/login is out of scope (needs real tokens); feature login hooks
+ * no-op without credentials, so the CLIs still install.
+ *
+ * NOTE: `atlassian` is temporarily removed — its `twg` installer fetches
+ * an Atlassian URL that is currently serving HTML instead of the script
+ * (upstream breakage), which fails the whole feature build. Re-add it
+ * (and the acli/twg checks below) once that endpoint is fixed. See
+ * getmonoceros/workbench#35.
  */
 export const withFeatures: Scenario = {
   id: 'with-features',
   description:
-    'init → apply (claude, opencode, github, gitlab, atlassian) → assert each CLI --version + claude/opencode wiring → remove',
+    'init → apply (claude, opencode, github, gitlab) → assert each CLI --version + claude/opencode wiring → remove',
   estimatedSeconds: 240,
   async run(ctx) {
     await ctx.step(
-      `init ${ctx.name} --with-features=claude,opencode,github,gitlab,atlassian`,
+      `init ${ctx.name} --with-features=claude,opencode,github,gitlab`,
       () =>
         ctx.cli([
           'init',
           ctx.name,
-          '--with-features=claude,opencode,github,gitlab,atlassian',
+          '--with-features=claude,opencode,github,gitlab',
         ]),
     );
 
@@ -44,8 +50,8 @@ export const withFeatures: Scenario = {
       ['opencode', 'opencode --version'],
       ['gh (github)', 'gh --version'],
       ['glab (gitlab)', 'glab --version'],
-      ['acli (atlassian rovodev)', 'acli --version'],
-      ['twg (atlassian)', 'twg --version'],
+      // acli/twg (atlassian) temporarily removed — see the note above
+      // and getmonoceros/workbench#35.
     ];
     for (const [label, cmd] of tools) {
       await ctx.step(`${label} installed`, () => assertOk(ctx, label, cmd));
