@@ -8,7 +8,7 @@ import { runDocker } from '../lib/docker.js';
 
 const FIXTURE_REPO = 'https://github.com/getmonoceros/monoceros-e2e-fixture';
 const APP = 'monoceros-e2e-fixture';
-const SOCAT_IMAGE = 'alpine/socat:1.8.0.3';
+const CADDY_IMAGE = 'caddy:2.11.4';
 
 /**
  * `with-launch` — the per-app launch-config lifecycle (ADR 0027/0028)
@@ -82,8 +82,8 @@ export const withLaunch: Scenario = {
     );
     try {
       await ctx.step(
-        `share exposes all 3 configured ports as 0.0.0.0 socat sidecars`,
-        () => expectSocatPorts(ctx, [3001, 5173, 6006]),
+        `share exposes all 3 configured ports on 0.0.0.0 via the Caddy terminator`,
+        () => expectSharedPorts(ctx, [3001, 5173, 6006]),
       );
     } finally {
       // SIGINT to the whole group mirrors a terminal Ctrl+C and reaches
@@ -100,18 +100,18 @@ export const withLaunch: Scenario = {
       ]);
     }
 
-    await ctx.step(`share cleaned up its sidecars on Ctrl+C`, () =>
-      expectSocatPorts(ctx, []),
+    await ctx.step(`share cleaned up its terminator on Ctrl+C`, () =>
+      expectSharedPorts(ctx, []),
     );
   },
 };
 
-/** Among our three ports, which are currently published by a socat sidecar. */
+/** Among our three ports, which are currently published by the share terminator. */
 async function sharedPorts(): Promise<number[]> {
   const res = await runDocker([
     'ps',
     '--filter',
-    `ancestor=${SOCAT_IMAGE}`,
+    `ancestor=${CADDY_IMAGE}`,
     '--format',
     '{{.Ports}}',
   ]);
@@ -124,25 +124,29 @@ async function sharedPorts(): Promise<number[]> {
   return [...found].sort((a, b) => a - b);
 }
 
-/** Assert the set of our ports published by socat equals `expected`. */
-async function expectSocatPorts(
+/**
+ * Assert the set of our ports published by the share terminator equals
+ * `expected`. Generous retry budget: the first `monoceros share` pulls the
+ * Caddy terminator image, which can outlast a short window.
+ */
+async function expectSharedPorts(
   ctx: ScenarioCtx,
   expected: number[],
 ): Promise<void> {
-  const attempts = 12;
+  const attempts = 40;
   const delayMs = 500;
   let last: number[] = [];
   const want = [...expected].sort((a, b) => a - b).join(',');
   for (let i = 0; i < attempts; i++) {
     last = await sharedPorts();
     if (last.join(',') === want) {
-      ctx.expect(`socat sidecars for ports [${want || 'none'}]`, true);
+      ctx.expect(`share terminator for ports [${want || 'none'}]`, true);
       return;
     }
     await sleep(delayMs);
   }
   ctx.expect(
-    `socat sidecars for ports [${want || 'none'}]`,
+    `share terminator for ports [${want || 'none'}]`,
     false,
     `after ${(attempts * delayMs) / 1000}s saw [${last.join(',') || 'none'}]`,
   );

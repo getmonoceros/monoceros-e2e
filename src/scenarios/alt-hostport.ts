@@ -263,7 +263,9 @@ async function probeHostTcp(
   host: string,
   port: number,
 ): Promise<void> {
-  const attempts = 15;
+  // Generous budget: the first `monoceros share` pulls the Caddy terminator
+  // image, which can outlast a short window.
+  const attempts = 40;
   const delayMs = 500;
   let lastError: Error | null = null;
   for (let i = 0; i < attempts; i++) {

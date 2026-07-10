@@ -81,7 +81,8 @@ function mountRealm(ctx: ScenarioCtx): void {
   const ymlPath = path.join(home, 'container-configs', `${ctx.name}.yml`);
   const yml = readFileSync(ymlPath, 'utf8');
 
-  const anchor = '    command: start-dev --import-realm\n';
+  const anchor =
+    '    command: start-dev --import-realm --proxy-headers=xforwarded\n';
   if (!yml.includes(anchor)) {
     throw new Error(
       `keycloak command anchor not found in ${ymlPath} — did the curated keycloak service change?`,
