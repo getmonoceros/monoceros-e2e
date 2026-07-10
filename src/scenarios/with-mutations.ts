@@ -33,8 +33,8 @@ export const withMutations: Scenario = {
       ctx.cli(['apply', ctx.name, '--yes']),
     );
 
-    await ctx.step(`add-apt-packages ${ctx.name} -- jq`, () =>
-      ctx.cli(['add-apt-packages', ctx.name, '--yes', '--', 'jq']),
+    await ctx.step(`add-apt-packages ${ctx.name} jq`, () =>
+      ctx.cli(['add-apt-packages', ctx.name, 'jq', '--yes']),
     );
 
     await ctx.step(`add-feature ${ctx.name} github`, () =>

@@ -71,8 +71,8 @@ export const withPort: Scenario = {
       },
     );
 
-    await ctx.step(`add-port ${a} -- 5173 (mid-flight, hot-reload)`, () =>
-      ctx.cli(['add-port', a, '--yes', '--', '5173']),
+    await ctx.step(`add-port ${a} 5173 (mid-flight, hot-reload)`, () =>
+      ctx.cli(['add-port', a, '5173', '--yes']),
     );
 
     await ctx.step(
