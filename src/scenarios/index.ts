@@ -17,6 +17,7 @@ import { withTunnel } from './with-tunnel.js';
 import { withLaunch } from './with-launch.js';
 import { withBriefing } from './with-briefing.js';
 import { imageModeZombie } from './image-mode-zombie.js';
+import { modeSwitch } from './mode-switch.js';
 import { upgrade } from './upgrade.js';
 import { portConflict } from './port-conflict.js';
 import { altHostport } from './alt-hostport.js';
@@ -48,6 +49,7 @@ export const SCENARIOS: Scenario[] = [
   withLaunch,
   withBriefing,
   imageModeZombie,
+  modeSwitch,
   upgrade,
   portConflict,
   altHostport,
