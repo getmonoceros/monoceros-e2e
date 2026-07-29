@@ -3,7 +3,8 @@ import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
 /**
  * `with-briefing` — verifies the AI-tool briefing pipeline that
  * `monoceros apply` writes at the container workspace root: AGENTS.md,
- * CLAUDE.md and .monoceros/commands.md. See workbench ADR 0014.
+ * CLAUDE.md and the chapters under .monoceros/. See workbench ADR 0014 for
+ * where they live and ADR 0039 for the order they are in.
  *
  * Unit tests (`apply-yml.test.ts` in the workbench) already prove the
  * files land at the expected host path. What unit tests can't prove
@@ -24,7 +25,7 @@ import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
  *   1. `monoceros init … --with-features=atlassian/rovodev` (rovodev
  *      only — sets the atlassian feature's `twg: false`).
  *   2. `monoceros apply` materialises the container, scaffold + briefing.
- *   3. File-existence checks for the three briefing files.
+ *   3. File-existence checks for every briefing file, imports included.
  *   4. Walk-up reachability from a mocked
  *      `projects/<probe>/` subdirectory.
  *   5. Content greps: stack and feature-line filtering reflect the yml.
@@ -38,7 +39,7 @@ import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
 export const withBriefing: Scenario = {
   id: 'with-briefing',
   description:
-    'init → apply → verify AGENTS.md / CLAUDE.md / commands.md exist, walk-up works, content reflects whenOption gating',
+    'init → apply → verify AGENTS.md / CLAUDE.md / the .monoceros chapters exist, walk-up works, rules come first, the stated line count is true, content reflects whenOption gating',
   estimatedSeconds: 120,
   async run(ctx) {
     await ctx.step(
@@ -58,9 +59,8 @@ export const withBriefing: Scenario = {
       await ctx.cli(['apply', ctx.name, '--yes']);
     });
 
-    await ctx.step(
-      `briefing files exist at /workspaces/${ctx.name}/`,
-      () => assertFilesExist(ctx),
+    await ctx.step(`briefing files exist at /workspaces/${ctx.name}/`, () =>
+      assertFilesExist(ctx),
     );
 
     await ctx.step(
@@ -68,8 +68,14 @@ export const withBriefing: Scenario = {
       () => assertWalkUpReaches(ctx),
     );
 
-    await ctx.step(`AGENTS.md content reflects the yml + whenOption gating`, () =>
-      assertAgentsContent(ctx),
+    await ctx.step(
+      `AGENTS.md content reflects the yml + whenOption gating`,
+      () => assertAgentsContent(ctx),
+    );
+
+    await ctx.step(
+      `AGENTS.md's stated line count matches the file on disk`,
+      () => assertStatedLineCount(ctx),
     );
 
     await ctx.step(`CLAUDE.md is the @AGENTS.md import inside markers`, () =>
@@ -90,6 +96,10 @@ async function assertFilesExist(ctx: ScenarioCtx): Promise<void> {
     `test -f ${root}/AGENTS.md || { echo missing-agents; exit 1; }`,
     `test -f ${root}/CLAUDE.md || { echo missing-claude; exit 1; }`,
     `test -f ${root}/.monoceros/commands.md || { echo missing-commands; exit 1; }`,
+    // The chapters AGENTS.md imports (workbench ADR 0039). An import
+    // pointing at a missing file is worse than no import at all.
+    `test -f ${root}/.monoceros/conventions.md || { echo missing-conventions; exit 1; }`,
+    `test -f ${root}/.monoceros/servers.md || { echo missing-servers; exit 1; }`,
     `echo ok`,
   ].join(' && ');
   const result = await ctx.cliCapture([
@@ -101,7 +111,7 @@ async function assertFilesExist(ctx: ScenarioCtx): Promise<void> {
     script,
   ]);
   ctx.expect(
-    'AGENTS.md, CLAUDE.md and .monoceros/commands.md all present',
+    'AGENTS.md, CLAUDE.md and the .monoceros chapters all present',
     result.exitCode === 0 && result.stdout.trim().endsWith('ok'),
     result.exitCode === 0
       ? `unexpected stdout: ${result.stdout.trim()}`
@@ -195,6 +205,50 @@ async function assertAgentsContent(ctx: ScenarioCtx): Promise<void> {
     'AGENTS.md imports the commands reference',
     body.includes('@.monoceros/commands.md'),
     '@.monoceros/commands.md import line not found',
+  );
+  // Rules before inventory before background (workbench ADR 0039): an
+  // agent that reads only the first screen must land on the rules.
+  const rules = body.indexOf('## Rules');
+  const inventory = body.indexOf('## What is here');
+  const background = body.indexOf('## What Monoceros is');
+  ctx.expect(
+    'AGENTS.md leads with the rules, then the inventory, then the background',
+    rules > -1 && rules < inventory && inventory < background,
+    `offsets: rules=${rules} inventory=${inventory} background=${background}`,
+  );
+  ctx.expect(
+    'AGENTS.md imports the two chapters it moved out',
+    body.includes('@.monoceros/conventions.md') &&
+      body.includes('@.monoceros/servers.md'),
+    'one of the chapter imports is missing',
+  );
+}
+
+/**
+ * The briefing states its own line count so a truncated read has a
+ * visible contradiction in front of it. The number is generated from the
+ * finished file, so it must equal `wc -l` on the real thing — and a
+ * leftover placeholder would show up here too.
+ */
+async function assertStatedLineCount(ctx: ScenarioCtx): Promise<void> {
+  const file = `${workspaceRoot(ctx.name)}/AGENTS.md`;
+  const script = [
+    `claimed=$(grep -o 'This file is [0-9]* lines long' ${file} | grep -o '[0-9]*')`,
+    `actual=$(wc -l < ${file} | tr -d ' ')`,
+    `test "$claimed" = "$actual" && echo ok || echo "claimed=$claimed actual=$actual"`,
+  ].join('; ');
+  const result = await ctx.cliCapture([
+    'run',
+    ctx.name,
+    '--',
+    'bash',
+    '-c',
+    script,
+  ]);
+  ctx.expect(
+    'the line count in the header equals `wc -l` on AGENTS.md',
+    result.exitCode === 0 && result.stdout.trim().endsWith('ok'),
+    `exit ${result.exitCode}: ${result.stdout.trim()} / ${result.stderr.trim()}`,
   );
 }
 

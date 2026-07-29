@@ -16,6 +16,7 @@ import { withMutations } from './with-mutations.js';
 import { withTunnel } from './with-tunnel.js';
 import { withLaunch } from './with-launch.js';
 import { withBriefing } from './with-briefing.js';
+import { withCheck } from './with-check.js';
 import { imageModeZombie } from './image-mode-zombie.js';
 import { modeSwitch } from './mode-switch.js';
 import { upgrade } from './upgrade.js';
@@ -48,6 +49,7 @@ export const SCENARIOS: Scenario[] = [
   withTunnel,
   withLaunch,
   withBriefing,
+  withCheck,
   imageModeZombie,
   modeSwitch,
   upgrade,
