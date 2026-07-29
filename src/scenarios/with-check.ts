@@ -101,7 +101,10 @@ async function makeFindings(ctx: ScenarioCtx): Promise<void> {
   const script = [
     `mkdir -p ${shop}`,
     `printf '%s' '{"name":"shop","scripts":{"dev":"vite"}}' > ${shop}/package.json`,
-    `printf '%s\\n' ${JSON.stringify(compose)} > ${shop}/compose.yaml`,
+    // `%b`, not `%s`: the JSON string carries `\n` as an escape, and only
+    // `%b` expands those. With `%s` the whole compose file lands on one
+    // line and the check reports unparseable YAML instead of the drift.
+    `printf '%b\\n' ${JSON.stringify(compose)} > ${shop}/compose.yaml`,
     `echo ok`,
   ].join(' && ');
   const result = await ctx.cliCapture([
@@ -135,6 +138,14 @@ async function assertFindings(ctx: ScenarioCtx): Promise<void> {
   ctx.expect(
     'the workspace-registration fix names the folders entry to add',
     out.includes('"path": "projects/shop"'),
+    `stdout was: ${out.trim()}`,
+  );
+  // Guard on the fixture itself: a compose file written wrong would be
+  // reported as unparseable, and every drift assertion below would fail
+  // for a reason that has nothing to do with the check.
+  ctx.expect(
+    'the fixture compose file is valid YAML',
+    !out.includes('Not parseable as YAML'),
     `stdout was: ${out.trim()}`,
   );
   ctx.expect(
