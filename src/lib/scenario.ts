@@ -191,12 +191,13 @@ async function teardown(_ctx: ScenarioCtx, name: string): Promise<void> {
   // worth surfacing, not worth retracting the result. Pre-Flight on
   // the next run mops up what the framework couldn't.
   //
-  // Common Linux quirk this catches: postgres service writes
-  // /var/lib/postgresql as root (its container UID), the host's
-  // bind-mount mirrors those permissions, and the unprivileged
-  // monoceros remove can't rmdir the data/postgres/ tree. The step
-  // shows ✗ FAILED with the EACCES line, the maintainer sees it,
-  // the test result stays honest.
+  // What it still catches: the container writes files as its own UID
+  // (the SSH host key at 0600, the keycloak import dir as root), and on
+  // Linux the unprivileged monoceros remove can't unlink those, so the
+  // delete falls back to a throw-away root container. Service DATA is no
+  // longer among them - it lives in a docker volume since ADR 0036, not in
+  // a bind-mounted data/<svc>/ tree. The step shows the real error either
+  // way, the maintainer sees it, and the test result stays honest.
   try {
     await _ctx.step(`Teardown — remove ${name}`, () =>
       run(['remove', name, '--no-backup', '--yes']),

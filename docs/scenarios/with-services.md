@@ -28,7 +28,9 @@ In dieser Reihenfolge:
    stdout-Zeile muss `ok` sein. Beweist Postgres-Wire-Protokoll +
    Service-Credentials aus dem Service-Catalog.
 6. **`monoceros remove <name>`** räumt Compose-Stack, das
-   `data/postgres/`-Bind-Mount, den geclonten Fixture-Pfad und yml ab.
+   Daten-Volume `monoceros-<name>-data-postgres`, den geclonten
+   Fixture-Pfad und yml ab. Dass die Daten dabei im Backup landen und ein
+   `restore` sie zurückbringt, prüft `data-roundtrip`.
 
 ## Was es _nicht_ prüft
 

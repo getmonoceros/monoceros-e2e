@@ -17,6 +17,8 @@ import { withTunnel } from './with-tunnel.js';
 import { withLaunch } from './with-launch.js';
 import { withBriefing } from './with-briefing.js';
 import { withCheck } from './with-check.js';
+import { dataRoundtrip } from './data-roundtrip.js';
+import { withDeployBlocks } from './with-deploy-blocks.js';
 import { imageModeZombie } from './image-mode-zombie.js';
 import { modeSwitch } from './mode-switch.js';
 import { upgrade } from './upgrade.js';
@@ -50,6 +52,8 @@ export const SCENARIOS: Scenario[] = [
   withLaunch,
   withBriefing,
   withCheck,
+  dataRoundtrip,
+  withDeployBlocks,
   imageModeZombie,
   modeSwitch,
   upgrade,
