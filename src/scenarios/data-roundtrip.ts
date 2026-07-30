@@ -82,10 +82,9 @@ export const dataRoundtrip: Scenario = {
       expectRow(ctx, 'after restore'),
     );
 
-    await ctx.step('clean up the backup this scenario wrote', async () => {
-      await fs.rm(backup, { recursive: true, force: true });
-      ctx.info(`removed ${backup}`);
-    });
+    await ctx.step('clean up the backup this scenario wrote', () =>
+      removeBackup(ctx, backup),
+    );
   },
 };
 
@@ -148,6 +147,43 @@ async function removeWithBackup(ctx: ScenarioCtx): Promise<string> {
   );
   ctx.info(`backup at ${backup}, cluster file ${cluster ?? '<none>'}`);
   return backup;
+}
+
+/**
+ * Delete the backup this scenario produced, root-owned parts included.
+ *
+ * `fs.rm` cannot: the cluster directory copied out of the volume is
+ * `drwx------` owned by uid 999, so the host-side recursive delete gets
+ * EACCES on `data/postgres/<version>/<dir>` — the same wall the read side
+ * hits. So the removal runs as root in a throw-away container, with the
+ * backup's PARENT mounted so the top-level directory goes too.
+ *
+ * Cleanup, not an assertion: a leftover backup directory costs disk on the
+ * runner, it does not invalidate the run. A failure is reported and the
+ * scenario still passes.
+ */
+async function removeBackup(ctx: ScenarioCtx, backup: string): Promise<void> {
+  const parent = path.dirname(backup);
+  const leaf = path.basename(backup);
+  const { exitCode, stderr } = await runDocker([
+    'run',
+    '--rm',
+    '-v',
+    `${parent}:/backups`,
+    COPY_IMAGE,
+    'rm',
+    '-rf',
+    `/backups/${leaf}`,
+  ]);
+  if (exitCode !== 0) {
+    ctx.info(
+      `could not remove ${backup} (docker rm exit ${exitCode}${
+        stderr.trim() ? `: ${stderr.trim()}` : ''
+      }); left it in place`,
+    );
+    return;
+  }
+  ctx.info(`removed ${backup}`);
 }
 
 /**
