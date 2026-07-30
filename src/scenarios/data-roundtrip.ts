@@ -1,6 +1,13 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { runDocker } from '../lib/docker.js';
 import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
+
+/**
+ * Same throw-away image the workbench's own remove/backup fallbacks use, so
+ * reading a backup needs no image this suite does not already pull.
+ */
+const COPY_IMAGE = 'alpine:3.21';
 
 /**
  * `data-roundtrip` — Service-Daten überleben den ganzen Lebenszyklus.
@@ -133,7 +140,7 @@ async function removeWithBackup(ctx: ScenarioCtx): Promise<string> {
   const backup = path.join(backupsDir, mine[mine.length - 1]!);
 
   const dataDir = path.join(backup, 'container', 'data', 'postgres');
-  const cluster = await findFile(dataDir, 'PG_VERSION');
+  const cluster = await findFileAsRoot(dataDir, 'PG_VERSION');
   ctx.expect(
     'the backup carries the postgres cluster as plain files',
     cluster !== null,
@@ -143,23 +150,52 @@ async function removeWithBackup(ctx: ScenarioCtx): Promise<string> {
   return backup;
 }
 
-/** Depth-first search for a file by name; returns its path or null. */
-async function findFile(dir: string, name: string): Promise<string | null> {
-  let entries;
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
+/**
+ * Depth-first search for a file by name, run as root inside a throw-away
+ * container. Returns the path relative to `dir`, or null.
+ *
+ * Why not `fs.readdir` from the host: a Postgres cluster directory is
+ * `drwx------` owned by uid 999, and `remove` copies the data volume with
+ * `cp -a`, which preserves that. On Linux the backup tree therefore belongs
+ * to postgres and the user running the e2e tool cannot even list it — the
+ * host-side walk gets EACCES and reports "no data" for a backup that is
+ * perfectly fine. It only looked correct on macOS, where Docker Desktop's
+ * VirtioFS does not pass the ownership through to the host (the same
+ * platform asymmetry this scenario's header calls out).
+ *
+ * So the backup is read with the same eyes that wrote it: root, inside a
+ * container, exactly as `remove` does for its own EACCES fallback.
+ */
+async function findFileAsRoot(
+  dir: string,
+  name: string,
+): Promise<string | null> {
+  const { exitCode, stdout, stderr } = await runDocker([
+    'run',
+    '--rm',
+    '-v',
+    `${dir}:/backup:ro`,
+    COPY_IMAGE,
+    'find',
+    '/backup',
+    '-name',
+    name,
+    '-type',
+    'f',
+  ]);
+  if (exitCode !== 0) {
+    // A missing bind source (the directory was never written) is the
+    // interesting failure, and it reads as "not found" here. Anything
+    // else — no docker, no image — would be a broken harness, so it is
+    // worth seeing in the output rather than being swallowed.
+    if (stderr.trim()) process.stderr.write(`${stderr.trim()}\n`);
     return null;
   }
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isFile() && entry.name === name) return full;
-    if (entry.isDirectory()) {
-      const hit = await findFile(full, name);
-      if (hit) return hit;
-    }
-  }
-  return null;
+  const hit = stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  return hit ?? null;
 }
 
 function monocerosHome(): string {
