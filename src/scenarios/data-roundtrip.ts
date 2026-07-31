@@ -19,7 +19,9 @@ const COPY_IMAGE = 'alpine:3.21';
  * genau der Teil, den 0036 umgebaut hat.
  *
  * Lifecycle:
- *   1. `init --with-services=postgres` + `apply`.
+ *   1. `init --with-services=postgres` + `apply`, dann warten bis postgres
+ *      wirklich antwortet (`apply` kehrt zurück, wenn die Container laufen,
+ *      nicht wenn die Datenbank bedient).
  *   2. Zeile schreiben (psql aus dem Workspace, Credentials aus `$POSTGRES_URL`).
  *   3. `apply` nochmal — die Zeile ist noch da, das Volume wird also nicht
  *      neu angelegt.
@@ -49,6 +51,8 @@ export const dataRoundtrip: Scenario = {
     );
 
     await ctx.step(`apply ${ctx.name}`, () => ctx.cli(['apply', ctx.name]));
+
+    await ctx.step('postgres accepts connections', () => waitForPostgres(ctx));
 
     await ctx.step('write a row into postgres', () =>
       psql(
@@ -87,6 +91,42 @@ export const dataRoundtrip: Scenario = {
     );
   },
 };
+
+/**
+ * Wait until postgres answers a query, before the first write.
+ *
+ * `apply` returns when the containers are up, which is not when the database
+ * serves: postgres needs a few seconds, and on a slow runner more. Without
+ * this the scenario raced the database and lost at random - and a lost race
+ * reads exactly like a product bug, in a suite that gates every release.
+ *
+ * Retried INSIDE the workspace so 30 attempts cost one `monoceros run`
+ * invocation, the same shape `with-services` uses for its TCP probe. It
+ * queries rather than checking the port, because postgres accepts a
+ * connection a moment before it will run a statement ("the database system is
+ * starting up").
+ */
+async function waitForPostgres(ctx: ScenarioCtx): Promise<void> {
+  const script =
+    'for i in $(seq 1 30); do ' +
+    'psql "$POSTGRES_URL" -tAc "select 1" >/dev/null 2>&1 && echo ready && exit 0; ' +
+    'sleep 1; done; echo timeout; exit 1';
+  const result = await ctx.cliCapture([
+    'run',
+    ctx.name,
+    '--',
+    'bash',
+    '-c',
+    script,
+  ]);
+  ctx.expect(
+    'postgres answers `select 1` within 30s',
+    result.exitCode === 0 && result.stdout.trim().endsWith('ready'),
+    result.exitCode === 0
+      ? `unexpected stdout: ${result.stdout.trim()}`
+      : `exit ${result.exitCode}: ${result.stderr.trim() || result.stdout.trim()}`,
+  );
+}
 
 /** Run one SQL statement through psql in the workspace. */
 async function psql(
