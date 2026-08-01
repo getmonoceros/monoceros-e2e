@@ -1,4 +1,5 @@
-import type { Scenario } from '../lib/scenario.js';
+import { withGlobalEnvGitUser } from '../lib/global-config.js';
+import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
 
 /**
  * `minimal` — der schmälste sinnvolle Lifecycle-Beweis.
@@ -8,6 +9,7 @@ import type { Scenario } from '../lib/scenario.js';
  *   - `monoceros apply`             → Container fährt hoch (Image-Mode,
  *                                     keine Services)
  *   - `monoceros run -- node …`     → das Workspace-Image bringt Node mit
+ *   - ein Commit im Container       → die Git-Identität aus der env greift
  *   - `monoceros remove`            → Container weg, yml weg
  *
  * Wenn dieses Szenario versagt, ist die CLI baseline-kaputt — alles
@@ -16,37 +18,91 @@ import type { Scenario } from '../lib/scenario.js';
 export const minimal: Scenario = {
   id: 'minimal',
   description:
-    'init → apply → run -- node --version → remove (Image-Mode, keine Services)',
-  estimatedSeconds: 60,
+    'init → apply → run -- node --version → commit im Container → remove (Image-Mode, keine Services)',
+  estimatedSeconds: 70,
   async run(ctx) {
-    await ctx.step(`init ${ctx.name} --with-languages=node`, async () => {
-      await ctx.cli(['init', ctx.name, '--with-languages=node']);
+    // Die Identität kommt aus der globalen env, ohne `git.user` in der
+    // yml — genau der Fall, der lange nicht funktionierte: den Block
+    // schreibt `init` nur bei `--with-repos`, und diese Workbench hat
+    // keine. `with-check` deckt den yml-Weg ab, hier ist der env-Weg.
+    const restoreGitUser = await withGlobalEnvGitUser({
+      name: 'E2E Builder',
+      email: 'e2e@example.com',
     });
+    try {
+      await ctx.step(`init ${ctx.name} --with-languages=node`, async () => {
+        await ctx.cli(['init', ctx.name, '--with-languages=node']);
+      });
 
-    await ctx.step(`apply ${ctx.name}`, async () => {
-      await ctx.cli(['apply', ctx.name, '--yes']);
-    });
+      await ctx.step(`apply ${ctx.name}`, async () => {
+        await ctx.cli(['apply', ctx.name, '--yes']);
+      });
 
-    await ctx.step(`run ${ctx.name} -- node --version`, async () => {
-      const result = await ctx.cliCapture([
-        'run',
-        ctx.name,
-        '--',
-        'node',
-        '--version',
-      ]);
-      ctx.expect(
-        '`monoceros run … node --version` exits 0',
-        result.exitCode === 0,
-        `exit ${result.exitCode}: ${result.stderr.trim()}`,
+      await ctx.step(`run ${ctx.name} -- node --version`, async () => {
+        const result = await ctx.cliCapture([
+          'run',
+          ctx.name,
+          '--',
+          'node',
+          '--version',
+        ]);
+        ctx.expect(
+          '`monoceros run … node --version` exits 0',
+          result.exitCode === 0,
+          `exit ${result.exitCode}: ${result.stderr.trim()}`,
+        );
+        const versionLine = result.stdout.trim();
+        ctx.expect(
+          'stdout matches semver pattern v<MAJOR>.<MINOR>.<PATCH>',
+          /^v\d+\.\d+\.\d+/.test(versionLine),
+          `got ${JSON.stringify(versionLine)}`,
+        );
+        ctx.info(`node version inside the container: ${versionLine}`);
+      });
+
+      await ctx.step(
+        `commit inside ${ctx.name} works with the identity from the env`,
+        () => assertCanCommit(ctx),
       );
-      const versionLine = result.stdout.trim();
-      ctx.expect(
-        'stdout matches semver pattern v<MAJOR>.<MINOR>.<PATCH>',
-        /^v\d+\.\d+\.\d+/.test(versionLine),
-        `got ${JSON.stringify(versionLine)}`,
-      );
-      ctx.info(`node version inside the container: ${versionLine}`);
-    });
+    } finally {
+      await restoreGitUser();
+    }
   },
 };
+
+/**
+ * The end-to-end proof of the identity: a real commit in a real
+ * container. A unit test can assert that `.monoceros/gitconfig` was
+ * written; only git itself decides whether the value reaches
+ * `git commit`, and its failure mode is the one that hurts - an agent
+ * halfway through a task, told "Please tell me who you are".
+ */
+async function assertCanCommit(ctx: ScenarioCtx): Promise<void> {
+  const script = [
+    'set -e',
+    'cd "$(mktemp -d)"',
+    'git init -q .',
+    'echo hello > file.txt',
+    'git add file.txt',
+    'git commit -q -m "e2e: identity from the env"',
+    'git log -1 --format="%an <%ae>"',
+  ].join(' && ');
+  const result = await ctx.cliCapture([
+    'run',
+    ctx.name,
+    '--',
+    'bash',
+    '-c',
+    script,
+  ]);
+  ctx.expect(
+    'the commit succeeds instead of asking who you are',
+    result.exitCode === 0,
+    `exit ${result.exitCode}: ${result.stdout.trim()} / ${result.stderr.trim()}`,
+  );
+  ctx.expect(
+    'the author is the identity from monoceros-config.env',
+    result.stdout.includes('E2E Builder <e2e@example.com>'),
+    `git log said: ${result.stdout.trim()}`,
+  );
+}

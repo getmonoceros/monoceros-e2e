@@ -105,3 +105,40 @@ export async function withGlobalGitUser(user: {
     }
   };
 }
+
+/**
+ * Put `GIT_USER_NAME` / `GIT_USER_EMAIL` into the global
+ * `monoceros-config.env` and return a `restore()` with the same
+ * contract as the helpers above.
+ *
+ * Appends rather than rewriting: that file holds the builder's real
+ * `GIT_TOKEN__*` values on a dev machine, and a scenario has no
+ * business dropping them for the length of its run. The restore puts
+ * the original content back either way.
+ */
+export async function withGlobalEnvGitUser(user: {
+  name: string;
+  email: string;
+}): Promise<() => Promise<void>> {
+  const file = path.join(monocerosHome(), 'monoceros-config.env');
+  let original: string | null = null;
+  try {
+    original = await fs.readFile(file, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+  const prefix = original === null || original.endsWith('\n') ? '' : '\n';
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(
+    file,
+    `${original ?? ''}${prefix}GIT_USER_NAME=${user.name}\nGIT_USER_EMAIL=${user.email}\n`,
+    'utf8',
+  );
+  return async () => {
+    if (original === null) {
+      await fs.rm(file, { force: true });
+    } else {
+      await fs.writeFile(file, original, 'utf8');
+    }
+  };
+}
