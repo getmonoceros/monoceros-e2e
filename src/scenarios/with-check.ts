@@ -1,3 +1,4 @@
+import { withGlobalGitUser } from '../lib/global-config.js';
 import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
 
 /**
@@ -39,30 +40,42 @@ export const withCheck: Scenario = {
   async run(ctx) {
     const name = ctx.name;
 
-    await ctx.step(`init ${name} (node, postgres, port 3000)`, () =>
-      ctx.cli([
-        'init',
-        name,
-        '--with-languages=node',
-        '--with-services=postgres',
-        '--with-ports=3000',
-      ]),
-    );
+    // A builder machine has a git identity; a CI runner does not, and a
+    // container applied without one cannot commit - which `check`
+    // reports, correctly. Set the identity the way a builder would, so
+    // "clean" here means clean for the reasons this scenario is about.
+    const restoreGitUser = await withGlobalGitUser({
+      name: 'E2E Builder',
+      email: 'e2e@example.com',
+    });
+    try {
+      await ctx.step(`init ${name} (node, postgres, port 3000)`, () =>
+        ctx.cli([
+          'init',
+          name,
+          '--with-languages=node',
+          '--with-services=postgres',
+          '--with-ports=3000',
+        ]),
+      );
 
-    await ctx.step(`apply ${name}`, () => ctx.cli(['apply', name, '--yes']));
+      await ctx.step(`apply ${name}`, () => ctx.cli(['apply', name, '--yes']));
 
-    await ctx.step(`check ${name} reports a clean workbench`, () =>
-      assertClean(ctx),
-    );
+      await ctx.step(`check ${name} reports a clean workbench`, () =>
+        assertClean(ctx),
+      );
 
-    await ctx.step(
-      `agent-style work in the container: unregistered project + drifted compose`,
-      () => makeFindings(ctx),
-    );
+      await ctx.step(
+        `agent-style work in the container: unregistered project + drifted compose`,
+        () => makeFindings(ctx),
+      );
 
-    await ctx.step(`check ${name} reports every finding and exits 1`, () =>
-      assertFindings(ctx),
-    );
+      await ctx.step(`check ${name} reports every finding and exits 1`, () =>
+        assertFindings(ctx),
+      );
+    } finally {
+      await restoreGitUser();
+    }
   },
 };
 

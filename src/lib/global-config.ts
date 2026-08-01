@@ -60,3 +60,48 @@ export async function withGlobalHostPort(
     }
   };
 }
+
+/**
+ * Set `defaults.git.user` in the global config and return a `restore()`
+ * with the same contract as {@link withGlobalHostPort}.
+ *
+ * Why a scenario needs this: a CI runner has no `git config --global`
+ * identity, so a container applied there gets none either, and
+ * `monoceros check` correctly reports a workbench that cannot commit.
+ * A real builder machine almost always has one, so hard-coding an
+ * identity here is what makes the run resemble a builder's, rather than
+ * a workaround for the finding.
+ */
+export async function withGlobalGitUser(user: {
+  name: string;
+  email: string;
+}): Promise<() => Promise<void>> {
+  const file = configPath();
+  let original: string | null = null;
+  try {
+    original = await fs.readFile(file, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(
+    file,
+    [
+      'schemaVersion: 1',
+      'defaults:',
+      '  git:',
+      '    user:',
+      `      name: ${user.name}`,
+      `      email: ${user.email}`,
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  return async () => {
+    if (original === null) {
+      await fs.rm(file, { force: true });
+    } else {
+      await fs.writeFile(file, original, 'utf8');
+    }
+  };
+}
