@@ -64,6 +64,10 @@ export const minimal: Scenario = {
         `commit inside ${ctx.name} works with the identity from the env`,
         () => assertCanCommit(ctx),
       );
+
+      await ctx.step(`run --in on a directory that does not exist yet`, () =>
+        assertCreatesMissingCwd(ctx),
+      );
     } finally {
       await restoreGitUser();
     }
@@ -104,5 +108,48 @@ async function assertCanCommit(ctx: ScenarioCtx): Promise<void> {
     'the author is the identity from monoceros-config.env',
     result.stdout.includes('E2E Builder <e2e@example.com>'),
     `git log said: ${result.stdout.trim()}`,
+  );
+}
+
+/**
+ * The first run for a new app names a directory the agent has not created
+ * yet. Two halves worth pinning: `--yes` creates it and runs there, and
+ * without it a non-interactive caller gets an error instead of a hang or a
+ * silent mkdir. The e2e is the only place the second half is real, since a
+ * unit test cannot show that nothing waits for input.
+ */
+async function assertCreatesMissingCwd(ctx: ScenarioCtx): Promise<void> {
+  const dir = 'projects/fresh-app';
+  const refused = await ctx.cliCapture([
+    'run',
+    ctx.name,
+    `--in=${dir}`,
+    '--',
+    'pwd',
+  ]);
+  ctx.expect(
+    'a missing directory is an error without --yes',
+    refused.exitCode !== 0,
+    `exit ${refused.exitCode}: ${refused.stdout.trim()}`,
+  );
+  ctx.expect(
+    'the error names the way out instead of bash cd',
+    `${refused.stdout}${refused.stderr}`.includes('--yes'),
+    `output was: ${refused.stdout.trim()} / ${refused.stderr.trim()}`,
+  );
+
+  const created = await ctx.cliCapture([
+    'run',
+    ctx.name,
+    `--in=${dir}`,
+    '--yes',
+    '--',
+    'pwd',
+  ]);
+  ctx.expect(
+    '--yes creates the directory and runs in it',
+    created.exitCode === 0 &&
+      created.stdout.trim().endsWith(`/${ctx.name}/${dir}`),
+    `exit ${created.exitCode}: ${created.stdout.trim()}`,
   );
 }
