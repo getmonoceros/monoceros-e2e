@@ -14,6 +14,13 @@ import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
  *     present (claude settings.json defaultMode; opencode.json
  *     instructions + external_directory). Guards the connectionEnv-class
  *     of regression on the feature side.
+ *   Level 3 — graphify's upstream canary: the skill registered for both
+ *     agents present, and a graph actually builds. graphify is pre-1.0 and
+ *     ships every few days while features install `latest` by design, so
+ *     the two things that can move under us get exercised rather than
+ *     pinned: the `install` flags and the `graphify-out/` layout. Since
+ *     claude and opencode are both in this container, it also proves the
+ *     registration is derived from the agents present (ADR 0049).
  *
  * Auth/login is out of scope (needs real tokens); the atlassian feature's
  * login hooks no-op without credentials, so acli/twg still install.
@@ -21,16 +28,16 @@ import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
 export const withFeatures: Scenario = {
   id: 'with-features',
   description:
-    'init → apply (claude, opencode, github, gitlab, atlassian) → assert each CLI --version + claude/opencode wiring → remove',
-  estimatedSeconds: 240,
+    'init → apply (claude, opencode, github, gitlab, atlassian, graphify) → assert each CLI --version + claude/opencode wiring + a graphify graph → remove',
+  estimatedSeconds: 300,
   async run(ctx) {
     await ctx.step(
-      `init ${ctx.name} --with-features=claude,opencode,github,gitlab,atlassian`,
+      `init ${ctx.name} --with-features=claude,opencode,github,gitlab,atlassian,graphify`,
       () =>
         ctx.cli([
           'init',
           ctx.name,
-          '--with-features=claude,opencode,github,gitlab,atlassian',
+          '--with-features=claude,opencode,github,gitlab,atlassian,graphify',
         ]),
     );
 
@@ -46,6 +53,11 @@ export const withFeatures: Scenario = {
       ['glab (gitlab)', 'glab --version'],
       ['acli (atlassian rovodev)', 'acli --version'],
       ['twg (atlassian)', 'twg --version'],
+      // Deliberately `bash -c` without `-l`: graphify is installed into a uv
+      // tool venv under ~/.local/share, and its launcher is only reachable
+      // because install.sh symlinks it onto the system PATH. A login shell
+      // would pass on ~/.profile's ~/.local/bin instead and prove nothing.
+      ['graphify', 'graphify --version'],
     ];
     for (const [label, cmd] of tools) {
       await ctx.step(`${label} installed`, () => assertOk(ctx, label, cmd));
@@ -66,6 +78,48 @@ export const withFeatures: Scenario = {
         '~/.config/opencode/opencode.json',
         ['instructions', 'external_directory'],
         'opencode.json',
+      ),
+    );
+
+    // Level 3 — graphify. The post-create hook detects the agents in the
+    // container, so both skills have to be there: one call per platform, and
+    // nothing configured in the yml.
+    await ctx.step('graphify skill registered for claude', () =>
+      assertOk(
+        ctx,
+        'graphify claude skill',
+        'test -f ~/.claude/skills/graphify/SKILL.md',
+      ),
+    );
+    await ctx.step('graphify skill registered for opencode', () =>
+      assertOk(
+        ctx,
+        'graphify opencode skill',
+        'test -f ~/.config/opencode/skills/graphify/SKILL.md',
+      ),
+    );
+
+    // The canary itself: a real graph over two files that call each other.
+    // `--code-only` because a corpus with any doc file needs a model, and this
+    // run has no key — the fixture's README is there to exercise exactly that
+    // path. GRAPH_REPORT.md and graph.html are NOT asserted: they take a
+    // second `cluster-only` run and the build alone does not write them.
+    await ctx.step('graphify builds a graph and answers a query', () =>
+      assertOk(
+        ctx,
+        'graphify graph',
+        [
+          'set -e',
+          'rm -rf /tmp/gfy && mkdir -p /tmp/gfy && cd /tmp/gfy',
+          'printf "from b import helper\\n\\nclass Runner:\\n    def run(self):\\n        return helper(1)\\n" > a.py',
+          'printf "def helper(x):\\n    return x + 1\\n" > b.py',
+          'printf "# fixture\\n" > README.md',
+          'graphify . --code-only',
+          'test -f graphify-out/graph.json',
+          // The edge a call graph exists for. A build that produced a file but
+          // resolved no calls would otherwise pass.
+          'graphify query "what calls helper?" | grep -q "calls"',
+        ].join('\n'),
       ),
     );
   },
