@@ -1,4 +1,6 @@
-import type { Scenario } from '../lib/scenario.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
 
 /**
  * `upgrade` — the runtime-image pinning lifecycle (ADR 0017).
@@ -15,6 +17,10 @@ import type { Scenario } from '../lib/scenario.js';
  *                                 → re-pins the yml to a DIFFERENT,
  *                                   explicit version and re-applies on
  *                                   that image
+ *   - the same run pulls a stale curated SERVICE tag up to the catalog
+ *     (ADR 0052) — the path a CVE fix in an upstream image travels to a
+ *     workbench that already exists. A regression here is silent: the
+ *     upgrade still succeeds and the old image keeps running.
  *
  * Teardown (framework) removes the container + its volumes afterwards.
  *
@@ -25,16 +31,27 @@ import type { Scenario } from '../lib/scenario.js';
 export const upgrade: Scenario = {
   id: 'upgrade',
   description:
-    'init (pinned) → apply → upgrade --list → upgrade <name> 1.0.0 (re-pin + re-apply on a different image)',
-  estimatedSeconds: 150,
+    'init (pinned, + postgres) → apply → upgrade --list → upgrade <name> 1.0.0 (re-pin + re-apply on a different image, stale service tag retagged)',
+  estimatedSeconds: 180,
   async run(ctx) {
-    await ctx.step(`init ${ctx.name} --with-languages=node`, async () => {
-      const r = await ctx.cliCapture([
-        'init',
-        ctx.name,
-        '--with-languages=node',
-      ]);
-      ctx.expect('init exits 0', r.exitCode === 0, r.stderr.trim());
+    await ctx.step(
+      `init ${ctx.name} --with-languages=node --with-services=postgres`,
+      async () => {
+        const r = await ctx.cliCapture([
+          'init',
+          ctx.name,
+          '--with-languages=node',
+          '--with-services=postgres',
+        ]);
+        ctx.expect('init exits 0', r.exitCode === 0, r.stderr.trim());
+      },
+    );
+
+    // What a workbench looks like once the catalog has moved on: the
+    // service still carries the tag it was created with.
+    let staleTag = '';
+    await ctx.step('age the postgres tag in the yml', async () => {
+      staleTag = agePostgresTag(ctx);
     });
 
     await ctx.step(`apply ${ctx.name} (init-pinned runtime)`, async () => {
@@ -65,7 +82,70 @@ export const upgrade: Scenario = {
           r.stdout.includes('1.0.0'),
           `stdout: ${r.stdout.trim()}`,
         );
+        ctx.expect(
+          'reports the retagged service',
+          /retagged/.test(r.stdout),
+          `stdout: ${r.stdout.trim()}`,
+        );
+      },
+    );
+
+    await ctx.step(
+      'the stale service tag is gone from the yml (ADR 0052)',
+      async () => {
+        const yml = readYml(ctx);
+        ctx.expect(
+          `postgres no longer runs ${staleTag}`,
+          !yml.includes(`image: ${staleTag}`),
+          `yml still carries ${staleTag}`,
+        );
+        ctx.expect(
+          'postgres still has a catalog image line',
+          /^\s+image: postgres:\S+$/m.test(yml),
+          'no postgres image line in the yml',
+        );
       },
     );
   },
 };
+
+function ymlPath(ctx: ScenarioCtx): string {
+  const home =
+    process.env.MONOCEROS_HOME?.trim() ||
+    path.join(
+      process.env.HOME ?? process.env.USERPROFILE ?? '/tmp',
+      '.monoceros',
+    );
+  return path.join(home, 'container-configs', `${ctx.name}.yml`);
+}
+
+function readYml(ctx: ScenarioCtx): string {
+  return readFileSync(ymlPath(ctx), 'utf8');
+}
+
+/**
+ * Rewrite the generated postgres tag to an old one, so `upgrade` has
+ * something to pull forward. Returns the stale reference it wrote.
+ *
+ * `postgres:13` is deliberately an image that still exists upstream:
+ * the re-pull has to succeed, otherwise the scenario would pass on a
+ * failed pull rather than on a working retag.
+ */
+function agePostgresTag(ctx: ScenarioCtx): string {
+  const target = ymlPath(ctx);
+  const yml = readFileSync(target, 'utf8');
+  const match = /^(\s+)image: (postgres:\S+)$/m.exec(yml);
+  if (!match) {
+    throw new Error(
+      `no postgres image line in ${target} — did the curated postgres service change?`,
+    );
+  }
+  const stale = 'postgres:13';
+  writeFileSync(
+    target,
+    yml.replace(match[0], `${match[1]}image: ${stale}`),
+    'utf8',
+  );
+  ctx.info(`aged ${match[2]} → ${stale}`);
+  return stale;
+}
