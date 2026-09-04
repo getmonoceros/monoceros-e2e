@@ -20,8 +20,8 @@ const COPY_IMAGE = 'alpine:3.21';
  *
  * Lifecycle:
  *   1. `init --with-services=postgres` + `apply`, dann warten bis postgres
- *      wirklich antwortet (`apply` kehrt zurück, wenn die Container laufen,
- *      nicht wenn die Datenbank bedient).
+ *      wirklich antwortet - jeder `apply` und jeder `restore` braucht diesen
+ *      Wait, siehe {@link waitForPostgres}.
  *   2. Zeile schreiben (psql aus dem Workspace, Credentials aus `$POSTGRES_URL`).
  *   3. `apply` nochmal — die Zeile ist noch da, das Volume wird also nicht
  *      neu angelegt.
@@ -93,12 +93,22 @@ export const dataRoundtrip: Scenario = {
 };
 
 /**
- * Wait until postgres answers a query, before the first write.
+ * Wait until postgres answers a query. Needed before EVERY statement this
+ * scenario runs, not only before the first write.
  *
  * `apply` returns when the containers are up, which is not when the database
  * serves: postgres needs a few seconds, and on a slow runner more. Without
  * this the scenario raced the database and lost at random - and a lost race
  * reads exactly like a product bug, in a suite that gates every release.
+ *
+ * The re-apply and the restore need it just as much, which is what the
+ * nightly run of 2026-09-04 collected: `apply` force-removes the existing
+ * containers (`docker rm -f`, so SIGKILL), postgres comes back up in crash
+ * recovery, and the read fired 100ms later got `FATAL: the database system
+ * is not yet accepting connections / Consistent recovery state has not been
+ * yet reached`. That window is longer than a cold start's, so a read after
+ * an `apply` is the likelier loser of the two. Hence the wait sits in
+ * {@link expectRow} rather than at one call site.
  *
  * Retried INSIDE the workspace so 30 attempts cost one `monoceros run`
  * invocation, the same shape `with-services` uses for its TCP probe. It
@@ -151,6 +161,7 @@ async function psql(
 }
 
 async function expectRow(ctx: ScenarioCtx, label: string): Promise<void> {
+  await waitForPostgres(ctx);
   const { stdout } = await psql(ctx, 'select note from survives;', label);
   ctx.expect(
     `the row is there ${label}`,
