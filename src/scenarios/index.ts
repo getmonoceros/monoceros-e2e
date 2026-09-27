@@ -10,6 +10,7 @@ import { withMailpit } from './with-mailpit.js';
 import { withKeycloak } from './with-keycloak.js';
 import { withTwoPostgres } from './with-two-postgres.js';
 import { withFeatures } from './with-features.js';
+import { withBrowser } from './with-browser.js';
 import { withPort } from './with-port.js';
 import { addRepo } from './add-repo.js';
 import { withMutations } from './with-mutations.js';
@@ -45,6 +46,7 @@ export const SCENARIOS: Scenario[] = [
   withKeycloak,
   withTwoPostgres,
   withFeatures,
+  withBrowser,
   withPort,
   addRepo,
   withMutations,
