@@ -1,7 +1,7 @@
 import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
 
 /**
- * `with-browser` — the browser feature (workbench ADR 0060): a headless
+ * `with-browser`: the browser feature (workbench ADR 0060): a headless
  * Chromium from Debian plus the Playwright MCP server, registered with the
  * agent by apply because the feature carries it, not because the yml names it.
  *
