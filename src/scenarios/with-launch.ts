@@ -27,6 +27,10 @@ const CADDY_IMAGE = 'caddy:2.11.4';
  *   - `share <name> <app>` forwards **every configured port** (all
  *     three) to the host's `0.0.0.0` as socat sidecars, and Ctrl+C
  *     (SIGINT) tears every one of them down.
+ *   - a plain `docker restart` of the workspace (what a Docker Desktop
+ *     restart or a host reboot does to it) brings all three started
+ *     targets back on their own, through the runtime entrypoint's
+ *     reconcile (workbench #25).
  *
  * Reachability is probed over the Traefik singleton on :80 by Host
  * header (same technique as `with-port`); the socat sidecars are
@@ -102,6 +106,33 @@ export const withLaunch: Scenario = {
 
     await ctx.step(`share cleaned up its terminator on Ctrl+C`, () =>
       expectSharedPorts(ctx, []),
+    );
+
+    // No monoceros command on purpose: a Docker Desktop restart or a host
+    // reboot only restarts the container, and the apps have to come back
+    // without the CLI being involved.
+    await ctx.step(
+      `docker restart monoceros-${name} (stands in for a reboot)`,
+      async () => {
+        const res = await runDocker(['restart', `monoceros-${name}`]);
+        ctx.expect(
+          `docker restart monoceros-${name}`,
+          res.exitCode === 0,
+          res.stderr.trim(),
+        );
+      },
+    );
+
+    await ctx.step(
+      `all three started targets are back after the restart`,
+      async () => {
+        // The entrypoint reconciles in the background, one target after the
+        // other, each waiting for its port: give it a wider window.
+        const slow = { attempts: 60, delayMs: 500 };
+        await waitForRoute(ctx, `http://${name}-5173.localhost/`, 5173, slow);
+        await waitForRoute(ctx, `http://${name}-3001.localhost/`, 3001, slow);
+        await waitForRoute(ctx, `http://${name}-6006.localhost/`, 6006, slow);
+      },
     );
   },
 };
