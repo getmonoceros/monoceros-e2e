@@ -15,10 +15,10 @@ import { withGlobalHostPort } from '../lib/global-config.js';
  *      docker-proxy, the classic native-dockerd-in-WSL orphan, or a
  *      holder in another Docker engine) → the message points at the
  *      leftover docker-proxy and a daemon restart, plus the
- *      `routing.hostPort` fallback.
+ *      `MONOCEROS_HOST_PORT` fallback.
  *
  * Mechanics:
- *   - `routing.hostPort` is steered onto a free HIGH port so the test
+ *   - `MONOCEROS_HOST_PORT` is steered onto a free HIGH port so the test
  *     never fights the real :80 (and needs no privileges). Restored in
  *     `finally`.
  *   - `monoceros-proxy` is removed first: the pre-flight skips entirely
@@ -47,7 +47,7 @@ export const portConflict: Scenario = {
 
     try {
       restoreConfig = await ctx.step(
-        `steer routing.hostPort onto the free test port ${PROBE_PORT}`,
+        `steer MONOCEROS_HOST_PORT onto the free test port ${PROBE_PORT}`,
         async () => {
           const restore = await withGlobalHostPort(PROBE_PORT);
           // The pre-flight skips when monoceros-proxy itself holds the
@@ -134,8 +134,8 @@ export const portConflict: Scenario = {
             truncate(out),
           );
           ctx.expect(
-            'message offers the routing.hostPort fallback',
-            /routing:/.test(out) && /hostPort/.test(out),
+            'message offers the MONOCEROS_HOST_PORT fallback',
+            /MONOCEROS_HOST_PORT=/.test(out),
             truncate(out),
           );
         },

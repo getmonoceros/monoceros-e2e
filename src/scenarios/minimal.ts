@@ -24,7 +24,7 @@ export const minimal: Scenario = {
     // Die Identität kommt aus der globalen env, ohne `git.user` in der
     // yml — genau der Fall, der lange nicht funktionierte: den Block
     // schreibt `init` nur bei `--with-repos`, und diese Workbench hat
-    // keine. `with-check` deckt den yml-Weg ab, hier ist der env-Weg.
+    // keine.
     const restoreGitUser = await withGlobalEnvGitUser({
       name: 'E2E Builder',
       email: 'e2e@example.com',

@@ -1,12 +1,12 @@
 # Szenario `alt-hostport`
 
-Treibt einen **nicht-Default `routing.hostPort`** end-to-end durch und
+Treibt einen **nicht-Default `MONOCEROS_HOST_PORT`** end-to-end durch und
 prüft die drei Dinge, die sich ändern (und das eine, das sich **nicht**
 ändern darf), wenn der Traefik-Proxy von `:80` wegzieht.
 
 ## Was es prüft
 
-1. **Setup**: `routing.hostPort` wird auf einen freien hohen Port
+1. **Setup**: `MONOCEROS_HOST_PORT` wird auf einen freien hohen Port
    (`18080`) gelenkt; `monoceros-proxy` wird entfernt, damit
    `ensureProxy` einen frischen Proxy auf dem Alt-Port bindet (ein
    laufender Proxy wird sonst **per Name** wiederverwendet, der Port
@@ -15,7 +15,7 @@ prüft die drei Dinge, die sich ändern (und das eine, das sich **nicht**
    `AGENTS.md` den `:18080`-Suffix - Default-Route **und**
    Sekundär-Route. Ohne den Suffix bekäme ein Agent eine tote
    `:80`-URL. (Die „Suffix nur wenn ≠ 80"-Logik ist im Workbench-Unit-
-   Test abgedeckt; hier wird bewiesen, dass `routing.hostPort` über ein
+   Test abgedeckt; hier wird bewiesen, dass `MONOCEROS_HOST_PORT` über ein
    echtes `apply` überhaupt im Briefing ankommt.)
 3. **Routing**: `http://<name>.localhost:18080/` erreicht die App über
    den auf den Alt-Port gebundenen Proxy (JSON-`port`-Probe vom Host).
@@ -28,7 +28,7 @@ monoceros-e2e-fixture` forwardet die **eigenen App-Ports** der App
 ## Warum gerade Share?
 
 Share/Tunnel umgehen den Traefik-Proxy komplett (socat auf dem rohen
-App-Port, kein `routing.hostPort`-Bezug). Der `hostPort`-Wechsel ist
+App-Port, kein `MONOCEROS_HOST_PORT`-Bezug). Der `hostPort`-Wechsel ist
 also genau die Änderung, bei der man sich fragt „bricht das Share?" -
 dieses Szenario zeigt schwarz auf weiß, dass es das nicht tut.
 

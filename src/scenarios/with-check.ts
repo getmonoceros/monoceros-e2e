@@ -1,4 +1,4 @@
-import { withGlobalGitUser } from '../lib/global-config.js';
+import { withGlobalEnvGitUser } from '../lib/global-config.js';
 import type { Scenario, ScenarioCtx } from '../lib/scenario.js';
 
 /**
@@ -44,7 +44,7 @@ export const withCheck: Scenario = {
     // container applied without one cannot commit - which `check`
     // reports, correctly. Set the identity the way a builder would, so
     // "clean" here means clean for the reasons this scenario is about.
-    const restoreGitUser = await withGlobalGitUser({
+    const restoreGitUser = await withGlobalEnvGitUser({
       name: 'E2E Builder',
       email: 'e2e@example.com',
     });

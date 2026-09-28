@@ -45,7 +45,7 @@ Per ADR 0007 + `docs/commands/port.md` der Workbench:
 - `http://<name>-<port>.localhost/` — jeder explizit hinzugefügte
   Port.
 
-Bei nicht-Default `routing.hostPort` (z. B. 8080) hängt der
+Bei nicht-Default `MONOCEROS_HOST_PORT` (z. B. 8080) hängt der
 host-port suffixartig dahinter:
 `http://<name>-5173.localhost:8080/`. Das Szenario setzt
 Default-Config (hostPort=80) voraus.

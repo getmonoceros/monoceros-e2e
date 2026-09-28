@@ -9,14 +9,14 @@ import {
 } from '../lib/cli-background.js';
 
 /**
- * `alt-hostport` - exercises a NON-default `routing.hostPort` end to
+ * `alt-hostport` - exercises a NON-default `MONOCEROS_HOST_PORT` end to
  * end and proves the three things that change (and the one that must
  * NOT) when the Traefik proxy moves off :80:
  *
  *   1. Briefing: the AGENTS.md `.localhost` URLs carry the `:<port>`
  *      suffix. Without it an agent is handed a dead `:80` URL. (The
  *      suffix-only-when-!=-80 logic is unit-tested in the workbench;
- *      here we prove `routing.hostPort` actually reaches the briefing
+ *      here we prove `MONOCEROS_HOST_PORT` actually reaches the briefing
  *      through a real apply.)
  *   2. Routing: `http://<name>.localhost:<port>/` reaches the app via
  *      the proxy bound to the alt port.
@@ -24,7 +24,7 @@ import {
  *      forwards the app's own ports via a socat sidecar, never through
  *      Traefik - so it keeps working unchanged with a non-80 hostPort.
  *
- * Mechanics: `routing.hostPort` is steered onto a free HIGH port and
+ * Mechanics: `MONOCEROS_HOST_PORT` is steered onto a free HIGH port and
  * restored in `finally`; `monoceros-proxy` is dropped first so
  * `ensureProxy` binds a fresh one on the alt port (it reuses a running
  * proxy by NAME, ignoring the port, so a stale :80 proxy would
@@ -42,7 +42,7 @@ const SECOND_PORT = 3001;
 export const altHostport: Scenario = {
   id: 'alt-hostport',
   description:
-    'routing.hostPort != 80: briefing URLs carry the :port suffix, routing works on the alt port, share is unaffected',
+    'MONOCEROS_HOST_PORT != 80: briefing URLs carry the :port suffix, routing works on the alt port, share is unaffected',
   estimatedSeconds: 180,
   async run(ctx) {
     let restoreConfig: (() => Promise<void>) | null = null;
@@ -50,7 +50,7 @@ export const altHostport: Scenario = {
 
     try {
       restoreConfig = await ctx.step(
-        `steer routing.hostPort onto ${ALT_PORT}`,
+        `steer MONOCEROS_HOST_PORT onto ${ALT_PORT}`,
         async () => {
           const restore = await withGlobalHostPort(ALT_PORT);
           // ensureProxy reuses a running monoceros-proxy by name and
@@ -98,7 +98,7 @@ export const altHostport: Scenario = {
           ),
       );
 
-      // ---- share is independent of routing.hostPort -----------------
+      // ---- share is independent of MONOCEROS_HOST_PORT -----------------
       share = await ctx.step(
         `start \`monoceros share ${ctx.name} ${APP}\` (background)`,
         () => startBackground(['share', ctx.name, APP], { warmupMs: 3000 }),

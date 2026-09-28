@@ -6,7 +6,7 @@ abzubrechen (Workbench `proxy/port-check.ts`).
 
 ## Was es prüft
 
-1. **Setup**: `routing.hostPort` wird auf einen freien **hohen
+1. **Setup**: `MONOCEROS_HOST_PORT` wird auf einen freien **hohen
    Testport** (`18099`) gelenkt, damit der Test nie mit dem echten
    `:80` kollidiert und keine Rechte braucht. `monoceros-proxy` wird
    entfernt - sonst überspringt die Pre-Flight die Prüfung („der Port
@@ -23,7 +23,7 @@ abzubrechen (Workbench `proxy/port-check.ts`).
    - sagt `no running container publishes it`,
    - zeigt auf den verwaisten `docker-proxy` + `systemctl restart
 docker`, und
-   - bietet den `routing.hostPort`-Fallback an.
+   - bietet den `MONOCEROS_HOST_PORT`-Fallback an.
 
 Beide Fälle scheitern in der Pre-Flight **vor** dem Container-Build,
 daher schnell (kein `devcontainer up`).
@@ -56,4 +56,4 @@ festgenagelt.
 | 2   | Meldung nennt den belegenden Container (`…-hog`)            |
 | 3   | apply Exit ≠ 0, Meldung `no running container publishes it` |
 | 4   | Meldung nennt `docker-proxy` + `systemctl restart docker`   |
-| 5   | Meldung bietet den `routing.hostPort`-Fallback an           |
+| 5   | Meldung bietet den `MONOCEROS_HOST_PORT`-Fallback an        |
