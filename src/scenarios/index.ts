@@ -10,6 +10,7 @@ import { withRustfs } from './with-rustfs.js';
 import { withMailpit } from './with-mailpit.js';
 import { withKeycloak } from './with-keycloak.js';
 import { withTwoPostgres } from './with-two-postgres.js';
+import { twoMailpits } from './two-mailpits.js';
 import { withFeatures } from './with-features.js';
 import { withBrowser } from './with-browser.js';
 import { withPort } from './with-port.js';
@@ -47,6 +48,7 @@ export const SCENARIOS: Scenario[] = [
   withMailpit,
   withKeycloak,
   withTwoPostgres,
+  twoMailpits,
   withFeatures,
   withBrowser,
   withPort,
