@@ -25,6 +25,7 @@ import { withDeployBlocks } from './with-deploy-blocks.js';
 import { imageModeZombie } from './image-mode-zombie.js';
 import { modeSwitch } from './mode-switch.js';
 import { upgrade } from './upgrade.js';
+import { serviceVersions } from './service-versions.js';
 import { portConflict } from './port-conflict.js';
 import { altHostport } from './alt-hostport.js';
 
@@ -63,6 +64,7 @@ export const SCENARIOS: Scenario[] = [
   imageModeZombie,
   modeSwitch,
   upgrade,
+  serviceVersions,
   portConflict,
   altHostport,
 ];
