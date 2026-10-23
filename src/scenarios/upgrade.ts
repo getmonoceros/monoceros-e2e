@@ -130,6 +130,11 @@ function readYml(ctx: ScenarioCtx): string {
  * `postgres:13` is deliberately an image that still exists upstream:
  * the re-pull has to succeed, otherwise the scenario would pass on a
  * failed pull rather than on a working retag.
+ *
+ * The `ref: postgres@<n>` line goes too (workbench #139). With it, an
+ * edited tag is the builder's own change, which `upgrade` keeps; without
+ * it, the entry is one an older CLI wrote with an older catalog tag, the
+ * case ADR 0052's retag exists for.
  */
 function agePostgresTag(ctx: ScenarioCtx): string {
   const target = ymlPath(ctx);
@@ -143,7 +148,9 @@ function agePostgresTag(ctx: ScenarioCtx): string {
   const stale = 'postgres:13';
   writeFileSync(
     target,
-    yml.replace(match[0], `${match[1]}image: ${stale}`),
+    yml
+      .replace(match[0], `${match[1]}image: ${stale}`)
+      .replace(/^\s+ref: postgres@\d+\n/m, ''),
     'utf8',
   );
   ctx.info(`aged ${match[2]} → ${stale}`);
